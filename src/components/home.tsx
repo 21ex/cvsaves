@@ -4,16 +4,14 @@ import { Button } from "./ui/button";
 import { Toaster } from "./ui/toaster";
 import { useToast } from "./ui/use-toast";
 
-//dashboard sections
-import BudgetSummary from "./Dashboard/BudgetSummary";
-import SpendingChart from "./Dashboard/SpendingChart";
-import ExpenseManager from "./Dashboard/ExpenseManager";
-import MonthSelector from "./Dashboard/MonthSelector";
-import CategoryDetails from "./Dashboard/CategoryDetails";
+import BudgetSummary     from "./Dashboard/BudgetSummary";
+import SpendingChart     from "./Dashboard/SpendingChart";
+import ExpenseManager    from "./Dashboard/ExpenseManager";
+import MonthSelector     from "./Dashboard/MonthSelector";
+import CategoryDetails   from "./Dashboard/CategoryDetails";
 import CategoryBreakdown from "./Dashboard/CategoryBreakdown";
-import DataManager from "./Dashboard/DataManager";
+import DataManager       from "./Dashboard/DataManager";
 
-// Supabase helpers
 import { useSessionContext } from "@supabase/auth-helpers-react";
 import {
   getExpenses,
@@ -21,19 +19,16 @@ import {
   deleteExpense,
   getMonthlyMeta,
   upsertMonthlyMeta,
-} from "@/lib/db";
-import {
   getUserCategories,
   insertDefaultCategories,
   updateCategoryColor,
   UserCategoryRow,
 } from "@/lib/db";
 
-/* shared type */
 import { Transaction } from "@/types/supabase";
 
-
-interface Expense extends Transaction { }
+/* ---------- types ---------- */
+interface Expense extends Transaction {}
 interface SpendingCategory {
   name: string;
   amount: number;
@@ -42,9 +37,9 @@ interface SpendingCategory {
 
 const Home: React.FC = () => {
   const { session } = useSessionContext();
-  const { toast } = useToast();
+  const { toast }   = useToast();
 
-  //state section
+  /* ---------- state ---------- */
   const [darkMode, setDarkMode] = useState(false);
 
   const [meta, setMeta] = useState<{ income: number; budget: number }>({
@@ -52,22 +47,23 @@ const Home: React.FC = () => {
     budget: 0,
   });
 
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [expenses,   setExpenses]   = useState<Expense[]>([]);
   const [categories, setCategories] = useState<UserCategoryRow[]>([]);
 
   const [selectedMonth, setSelectedMonth] = useState(
     new Date().toLocaleString("default", { month: "long" }),
   );
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedYear,  setSelectedYear]  = useState(new Date().getFullYear());
 
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategory,      setSelectedCategory]      = useState<string | null>(null);
   const [showCategoryBreakdown, setShowCategoryBreakdown] = useState(false);
 
+  /* month key like “2025-07” */
   const monthKey = `${selectedYear}-${String(
     new Date(Date.parse(`${selectedMonth} 1, 2000`)).getMonth() + 1,
   ).padStart(2, "0")}`;
 
-  //dark mode section
+  /* ---------- first-run: dark-mode ---------- */
   useEffect(() => {
     const stored = localStorage.getItem("budgetApp_darkMode");
     if (stored) {
@@ -77,10 +73,9 @@ const Home: React.FC = () => {
     }
   }, []);
 
-  //categories section
+  /* ---------- load categories ---------- */
   useEffect(() => {
     if (!session) return;
-
     (async () => {
       try {
         let rows = await getUserCategories(session.user.id);
@@ -90,12 +85,16 @@ const Home: React.FC = () => {
         }
         setCategories(rows);
       } catch (e: any) {
-        toast({ title: "Load categories failed", description: e.message, variant: "destructive" });
+        toast({
+          title: "Load categories failed",
+          description: e.message,
+          variant: "destructive",
+        });
       }
     })();
   }, [session]);
 
-  //income & budget section
+  /* ---------- load meta ---------- */
   useEffect(() => {
     if (!session) return;
     (async () => {
@@ -108,7 +107,7 @@ const Home: React.FC = () => {
     })();
   }, [session, monthKey]);
 
-  //expenses section
+  /* ---------- load expenses ---------- */
   useEffect(() => {
     if (!session) return;
     (async () => {
@@ -121,12 +120,12 @@ const Home: React.FC = () => {
     })();
   }, [session, monthKey]);
 
-  //storing the dark mode pref.
+  /* ---------- persist dark-mode ---------- */
   useEffect(() => {
     localStorage.setItem("budgetApp_darkMode", JSON.stringify(darkMode));
   }, [darkMode]);
 
-  //handlers
+  /* ---------- handlers ---------- */
   const toggleTheme = () => {
     const next = !darkMode;
     setDarkMode(next);
@@ -139,7 +138,11 @@ const Home: React.FC = () => {
       const row = await addExpense(session.user.id, e);
       setExpenses((prev) => [row, ...prev]);
     } catch (err: any) {
-      toast({ title: "Add failed", description: err.message, variant: "destructive" });
+      toast({
+        title: "Add failed",
+        description: err.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -151,13 +154,17 @@ const Home: React.FC = () => {
       await deleteExpense(id);
     } catch (err: any) {
       if (backup) setExpenses((p) => [backup, ...p]);
-      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+      toast({
+        title: "Delete failed",
+        description: err.message,
+        variant: "destructive",
+      });
     }
   };
 
   const saveMeta = async (next: { income: number; budget: number }) => {
     if (!session) return;
-    setMeta(next);
+    setMeta(next); // optimistic
     try {
       await upsertMonthlyMeta(session.user.id, monthKey, next);
     } catch (e: any) {
@@ -165,15 +172,12 @@ const Home: React.FC = () => {
     }
   };
   const handleBudgetChange = (v: number) => saveMeta({ income: meta.income, budget: v });
-  const handleIncomeChange = (v: number) => saveMeta({ income: v, budget: meta.budget });
+  const handleIncomeChange = (v: number) => saveMeta({ income: v,           budget: meta.budget });
 
   const handleCategoryColorChange = async (name: string, color: string) => {
     const row = categories.find((c) => c.name === name);
     if (!row) return;
-
-    setCategories((prev) =>
-      prev.map((c) => (c.id === row.id ? { ...c, color } : c)),
-    );
+    setCategories((prev) => prev.map((c) => (c.id === row.id ? { ...c, color } : c)));
     try {
       await updateCategoryColor(row.id, color);
     } catch (e: any) {
@@ -181,18 +185,12 @@ const Home: React.FC = () => {
     }
   };
 
-  //receiving the edited expenses from CategoryDetails
+  /* receive edited expense from details dialog */
   const handleExpenseUpdated = (updated: Expense) => {
-    setExpenses((prev) => {
-      const copy = [...prev];
-      const idx = copy.findIndex((e) => e.id === updated.id);
-      if (idx === -1) return copy;
-      copy[idx] = { ...updated, date: new Date(updated.date) };
-      return copy;
-    });
+    setExpenses((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
   };
 
-  //dates
+  /* ---------- derived ---------- */
   const filteredExpenses = expenses.filter((ex) => {
     const d = new Date(ex.date);
     return (
@@ -201,7 +199,7 @@ const Home: React.FC = () => {
     );
   });
 
-  const totalExpenses = filteredExpenses.reduce((s, ex) => s + ex.amount, 0);
+  const totalExpenses   = filteredExpenses.reduce((s, ex) => s + ex.amount, 0);
   const remainingBudget = meta.budget - totalExpenses;
 
   const spendingByCategory = filteredExpenses.reduce((acc, ex) => {
@@ -209,9 +207,10 @@ const Home: React.FC = () => {
     if (row) row.amount += ex.amount;
     else
       acc.push({
-        name: ex.category,
+        name:  ex.category,
         amount: ex.amount,
-        color: categories.find((c) => c.name === ex.category)?.color || "#C9CBCF",
+        color:
+          categories.find((c) => c.name === ex.category)?.color || "#C9CBCF",
       });
     return acc;
   }, [] as SpendingCategory[]);
@@ -219,7 +218,9 @@ const Home: React.FC = () => {
   const selectedCategoryColor =
     categories.find((c) => c.name === selectedCategory)?.color || "#C9CBCF";
 
-  //UI
+  /* ---------- UI ---------- */
+
+  ; // <- terminate previous statement to let JSX parse correctly
   return (
     <div className="min-h-screen bg-background transition-colors duration-300">
       <div className="container mx-auto px-4 py-8">
@@ -227,43 +228,47 @@ const Home: React.FC = () => {
         <header className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-foreground">CVSaves</h1>
           <Button variant="outline" size="icon" onClick={toggleTheme}>
-            {darkMode ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
+            {darkMode ? (
+              <SunIcon className="h-5 w-5" />
+            ) : (
+              <MoonIcon className="h-5 w-5" />
+            )}
           </Button>
         </header>
 
         {/* month selector */}
-        <section className="mb-8">
-          <MonthSelector
-            selectedMonth={selectedMonth}
-            selectedYear={selectedYear}
-            onMonthChange={(m, y) => { setSelectedMonth(m); setSelectedYear(y); }}
-          />
-        </section>
+        <MonthSelector
+          selectedMonth={selectedMonth}
+          selectedYear={selectedYear}
+          onMonthChange={(m, y) => {
+            setSelectedMonth(m);
+            setSelectedYear(y);
+          }}
+        />
 
         {/* summary */}
-        <section className="mb-8">
+        <div className="my-8">
           <BudgetSummary
             income={meta.income}
             budget={meta.budget}
             expenses={totalExpenses}
             remaining={remainingBudget}
-            onIncomeClick={() => { }}
+            onIncomeClick={() => {}}
             onBudgetChange={handleBudgetChange}
             onIncomeChange={handleIncomeChange}
           />
-        </section>
+        </div>
 
         {/* main */}
         {selectedCategory ? (
-          <section>
-            <CategoryDetails
-              category={selectedCategory}
-              expenses={filteredExpenses}
-              onBack={() => setSelectedCategory(null)}
-              onDeleteExpense={handleDeleteExpense}
-              onExpenseUpdated={handleExpenseUpdated}
-            />
-          </section>
+          <CategoryDetails
+            category={selectedCategory}
+            expenses={filteredExpenses}
+            categories={categories.map((c) => c.name)}
+            onBack={() => setSelectedCategory(null)}
+            onDeleteExpense={handleDeleteExpense}
+            onExpenseUpdated={handleExpenseUpdated}
+          />
         ) : (
           <>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
@@ -296,11 +301,12 @@ const Home: React.FC = () => {
               onExportData={() =>
                 toast({ title: "Data exported", description: "Downloaded" })
               }
-              onImportData={() => { }}
+              onImportData={() => {}}
             />
           </>
         )}
 
+        {/* fly-out */}
         {selectedCategory && (
           <CategoryBreakdown
             isOpen={showCategoryBreakdown}
