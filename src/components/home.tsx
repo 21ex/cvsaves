@@ -3,404 +3,311 @@ import { MoonIcon, SunIcon } from "lucide-react";
 import { Button } from "./ui/button";
 import { Toaster } from "./ui/toaster";
 import { useToast } from "./ui/use-toast";
+
+//dashboard sections
 import BudgetSummary from "./Dashboard/BudgetSummary";
 import SpendingChart from "./Dashboard/SpendingChart";
 import ExpenseManager from "./Dashboard/ExpenseManager";
-
 import MonthSelector from "./Dashboard/MonthSelector";
 import CategoryDetails from "./Dashboard/CategoryDetails";
 import CategoryBreakdown from "./Dashboard/CategoryBreakdown";
 import DataManager from "./Dashboard/DataManager";
+
+// Supabase helpers
+import { useSessionContext } from "@supabase/auth-helpers-react";
 import {
-  Transaction,
-  Category,
-  MonthData,
-  MonthlyData,
-} from "@/types/supabase";
+  getExpenses,
+  addExpense,
+  deleteExpense,
+  getMonthlyMeta,
+  upsertMonthlyMeta,
+} from "@/lib/db";
+import {
+  getUserCategories,
+  insertDefaultCategories,
+  updateCategoryColor,
+  UserCategoryRow,
+} from "@/lib/db";
 
-interface Expense extends Transaction {}
+/* shared type */
+import { Transaction } from "@/types/supabase";
 
+
+interface Expense extends Transaction { }
 interface SpendingCategory {
   name: string;
   amount: number;
   color: string;
 }
 
-const Home = () => {
+const Home: React.FC = () => {
+  const { session } = useSessionContext();
+  const { toast } = useToast();
+
+  //state section
   const [darkMode, setDarkMode] = useState(false);
-  const [monthlyData, setMonthlyData] = useState<MonthlyData>({});
+
+  const [meta, setMeta] = useState<{ income: number; budget: number }>({
+    income: 0,
+    budget: 0,
+  });
+
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [categories, setCategories] = useState<Category[]>([
-    { name: "Food", color: "#FF6384" },
-    { name: "Transportation", color: "#36A2EB" },
-    { name: "Entertainment", color: "#FFCE56" },
-    { name: "Housing", color: "#4BC0C0" },
-    { name: "Utilities", color: "#9966FF" },
-    { name: "Healthcare", color: "#FF9F40" },
-    { name: "Shopping", color: "#C9CBCF" },
-    { name: "Other", color: "#36A2EB" },
-  ]);
+  const [categories, setCategories] = useState<UserCategoryRow[]>([]);
+
   const [selectedMonth, setSelectedMonth] = useState(
     new Date().toLocaleString("default", { month: "long" }),
   );
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showCategoryBreakdown, setShowCategoryBreakdown] = useState(false);
-  const { toast } = useToast();
 
-  // Get current month key
-  const currentMonthKey = `${selectedYear}-${String(new Date(Date.parse(selectedMonth + " 1, 2000")).getMonth() + 1).padStart(2, "0")}`;
+  const monthKey = `${selectedYear}-${String(
+    new Date(Date.parse(`${selectedMonth} 1, 2000`)).getMonth() + 1,
+  ).padStart(2, "0")}`;
 
-  // Get current month data with defaults
-  const currentMonthData = monthlyData[currentMonthKey] || {
-    income: 5000,
-    budget: 4000,
-  };
-
-  // Load data from localStorage on component mount
+  //dark mode section
   useEffect(() => {
-    const savedDarkMode = localStorage.getItem("budgetApp_darkMode");
-    const savedMonthlyData = localStorage.getItem("budgetApp_monthlyData");
-    const savedExpenses = localStorage.getItem("budgetApp_expenses");
-    const savedCategories = localStorage.getItem("budgetApp_categories");
-
-    if (savedDarkMode) {
-      const isDark = JSON.parse(savedDarkMode);
+    const stored = localStorage.getItem("budgetApp_darkMode");
+    if (stored) {
+      const isDark = JSON.parse(stored);
       setDarkMode(isDark);
-      if (isDark) {
-        document.documentElement.classList.add("dark");
-      }
-    }
-    if (savedMonthlyData) setMonthlyData(JSON.parse(savedMonthlyData));
-    if (savedCategories) setCategories(JSON.parse(savedCategories));
-    if (savedExpenses) {
-      const parsedExpenses = JSON.parse(savedExpenses).map((expense: any) => ({
-        ...expense,
-        date: new Date(expense.date),
-      }));
-      setExpenses(parsedExpenses);
+      document.documentElement.classList.toggle("dark", isDark);
     }
   }, []);
 
-  // Save data to localStorage whenever state changes
+  //categories section
+  useEffect(() => {
+    if (!session) return;
+
+    (async () => {
+      try {
+        let rows = await getUserCategories(session.user.id);
+        if (!rows.length) {
+          await insertDefaultCategories(session.user.id);
+          rows = await getUserCategories(session.user.id);
+        }
+        setCategories(rows);
+      } catch (e: any) {
+        toast({ title: "Load categories failed", description: e.message, variant: "destructive" });
+      }
+    })();
+  }, [session]);
+
+  //income & budget section
+  useEffect(() => {
+    if (!session) return;
+    (async () => {
+      try {
+        const row = await getMonthlyMeta(session.user.id, monthKey);
+        setMeta(row ?? { income: 0, budget: 0 });
+      } catch (e: any) {
+        console.error("fetch meta:", e.message);
+      }
+    })();
+  }, [session, monthKey]);
+
+  //expenses section
+  useEffect(() => {
+    if (!session) return;
+    (async () => {
+      try {
+        const data = await getExpenses(session.user.id, monthKey);
+        setExpenses(data.map((e: any) => ({ ...e, date: new Date(e.date) })));
+      } catch (e: any) {
+        console.error("fetch expenses:", e.message);
+      }
+    })();
+  }, [session, monthKey]);
+
+  //storing the dark mode pref.
   useEffect(() => {
     localStorage.setItem("budgetApp_darkMode", JSON.stringify(darkMode));
   }, [darkMode]);
 
-  useEffect(() => {
-    localStorage.setItem("budgetApp_monthlyData", JSON.stringify(monthlyData));
-  }, [monthlyData]);
-
-  useEffect(() => {
-    localStorage.setItem("budgetApp_categories", JSON.stringify(categories));
-  }, [categories]);
-
-  useEffect(() => {
-    localStorage.setItem("budgetApp_expenses", JSON.stringify(expenses));
-  }, [expenses]);
-
+  //handlers
   const toggleTheme = () => {
-    const newDarkMode = !darkMode;
-    setDarkMode(newDarkMode);
-    if (newDarkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-    toast({
-      title: `Switched to ${newDarkMode ? "dark" : "light"} mode`,
-      description: "Theme preference saved",
-    });
+    const next = !darkMode;
+    setDarkMode(next);
+    document.documentElement.classList.toggle("dark", next);
   };
 
-  const handleAddExpense = (expense: Omit<Expense, "id">) => {
-    const newExpense = {
-      ...expense,
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-    };
-    setExpenses((prev) => [newExpense, ...prev]);
-    toast({
-      title: "Expense added",
-      description: `Added ${expense.amount.toFixed(2)} for ${expense.category}`,
-    });
-  };
-
-  const handleDeleteExpense = (id: string) => {
-    const expenseToDelete = expenses.find((e) => e.id === id);
-    setExpenses((prev) => prev.filter((expense) => expense.id !== id));
-    if (expenseToDelete) {
-      toast({
-        title: "Expense deleted",
-        description: `Removed ${expenseToDelete.amount.toFixed(2)} expense`,
-      });
-    }
-  };
-
-  const handleBudgetChange = (newBudget: number) => {
-    setMonthlyData((prev) => ({
-      ...prev,
-      [currentMonthKey]: {
-        ...currentMonthData,
-        budget: newBudget,
-      },
-    }));
-    toast({
-      title: "Budget updated",
-      description: `Monthly budget set to ${newBudget.toFixed(2)}`,
-    });
-  };
-
-  const handleIncomeChange = (newIncome: number) => {
-    setMonthlyData((prev) => ({
-      ...prev,
-      [currentMonthKey]: {
-        ...currentMonthData,
-        income: newIncome,
-      },
-    }));
-    toast({
-      title: "Income updated",
-      description: `Monthly income set to ${newIncome.toFixed(2)}`,
-    });
-  };
-
-  const handleCategoryColorChange = (categoryName: string, color: string) => {
-    setCategories((prev) =>
-      prev.map((cat) => (cat.name === categoryName ? { ...cat, color } : cat)),
-    );
-    toast({
-      title: "Category color updated",
-      description: `${categoryName} color changed`,
-    });
-  };
-
-  const handleMonthChange = (month: string, year: number) => {
-    setSelectedMonth(month);
-    setSelectedYear(year);
-    toast({
-      title: "Month changed",
-      description: `Viewing ${month} ${year}`,
-    });
-  };
-
-  const handleCategoryClick = (category: string) => {
-    setSelectedCategory(category);
-    setShowCategoryBreakdown(true);
-  };
-
-  const handleBackToOverview = () => {
-    setSelectedCategory(null);
-  };
-
-  const handleCloseCategoryBreakdown = () => {
-    setShowCategoryBreakdown(false);
-    setSelectedCategory(null);
-  };
-
-  const handleClearAllData = () => {
-    setExpenses([]);
-    setMonthlyData({});
-    localStorage.removeItem("budgetApp_expenses");
-    localStorage.removeItem("budgetApp_monthlyData");
-    toast({
-      title: "All data cleared",
-      description: "All expenses, income, and budget data has been reset",
-    });
-  };
-
-  const handleClearExpenses = () => {
-    setExpenses([]);
-    localStorage.removeItem("budgetApp_expenses");
-    toast({
-      title: "Expenses cleared",
-      description: "All expense records have been deleted",
-    });
-  };
-
-  const handleExportData = () => {
-    toast({
-      title: "Data exported",
-      description: "Your budget data has been downloaded",
-    });
-  };
-
-  const handleImportData = (data: any) => {
+  const handleAddExpense = async (e: Omit<Expense, "id">) => {
+    if (!session) return;
     try {
-      if (data.expenses) {
-        const importedExpenses = data.expenses.map((expense: any) => ({
-          ...expense,
-          date: new Date(expense.date),
-        }));
-        setExpenses(importedExpenses);
-      }
-      if (data.monthlyData) setMonthlyData(data.monthlyData);
-      if (data.categories) setCategories(data.categories);
-      // Legacy support
-      if (data.monthlyIncome || data.monthlyBudget) {
-        setMonthlyData((prev) => ({
-          ...prev,
-          [currentMonthKey]: {
-            income: data.monthlyIncome || currentMonthData.income,
-            budget: data.monthlyBudget || currentMonthData.budget,
-          },
-        }));
-      }
-
-      toast({
-        title: "Data imported",
-        description: "Your budget data has been successfully imported",
-      });
-    } catch (error) {
-      toast({
-        title: "Import failed",
-        description: "There was an error importing your data",
-        variant: "destructive",
-      });
+      const row = await addExpense(session.user.id, e);
+      setExpenses((prev) => [row, ...prev]);
+    } catch (err: any) {
+      toast({ title: "Add failed", description: err.message, variant: "destructive" });
     }
   };
 
-  // Filter expenses by selected month and year
-  const filteredExpenses = expenses.filter((expense) => {
-    const expenseDate = new Date(expense.date);
-    const expenseMonth = expenseDate.toLocaleString("default", {
-      month: "long",
+  const handleDeleteExpense = async (id: string) => {
+    if (!session) return;
+    const backup = expenses.find((ex) => ex.id === id);
+    setExpenses((p) => p.filter((ex) => ex.id !== id));
+    try {
+      await deleteExpense(id);
+    } catch (err: any) {
+      if (backup) setExpenses((p) => [backup, ...p]);
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const saveMeta = async (next: { income: number; budget: number }) => {
+    if (!session) return;
+    setMeta(next);
+    try {
+      await upsertMonthlyMeta(session.user.id, monthKey, next);
+    } catch (e: any) {
+      toast({ title: "Update failed", description: e.message, variant: "destructive" });
+    }
+  };
+  const handleBudgetChange = (v: number) => saveMeta({ income: meta.income, budget: v });
+  const handleIncomeChange = (v: number) => saveMeta({ income: v, budget: meta.budget });
+
+  const handleCategoryColorChange = async (name: string, color: string) => {
+    const row = categories.find((c) => c.name === name);
+    if (!row) return;
+
+    setCategories((prev) =>
+      prev.map((c) => (c.id === row.id ? { ...c, color } : c)),
+    );
+    try {
+      await updateCategoryColor(row.id, color);
+    } catch (e: any) {
+      toast({ title: "Save colour failed", description: e.message, variant: "destructive" });
+    }
+  };
+
+  //receiving the edited expenses from CategoryDetails
+  const handleExpenseUpdated = (updated: Expense) => {
+    setExpenses((prev) => {
+      const copy = [...prev];
+      const idx = copy.findIndex((e) => e.id === updated.id);
+      if (idx === -1) return copy;
+      copy[idx] = { ...updated, date: new Date(updated.date) };
+      return copy;
     });
-    const expenseYear = expenseDate.getFullYear();
-    return expenseMonth === selectedMonth && expenseYear === selectedYear;
+  };
+
+  //dates
+  const filteredExpenses = expenses.filter((ex) => {
+    const d = new Date(ex.date);
+    return (
+      d.toLocaleString("default", { month: "long" }) === selectedMonth &&
+      d.getFullYear() === selectedYear
+    );
   });
 
-  // Calculate totals for selected month
-  const totalExpenses = filteredExpenses.reduce(
-    (sum, expense) => sum + expense.amount,
-    0,
-  );
-  const remainingBudget = currentMonthData.budget - totalExpenses;
+  const totalExpenses = filteredExpenses.reduce((s, ex) => s + ex.amount, 0);
+  const remainingBudget = meta.budget - totalExpenses;
 
-  // Calculate spending by category for the chart (filtered by month)
-  const spendingByCategory = filteredExpenses.reduce((acc, expense) => {
-    const existing = acc.find((cat) => cat.name === expense.category);
-    if (existing) {
-      existing.amount += expense.amount;
-    } else {
-      const categoryColor =
-        categories.find((cat) => cat.name === expense.category)?.color ||
-        "#C9CBCF";
+  const spendingByCategory = filteredExpenses.reduce((acc, ex) => {
+    const row = acc.find((c) => c.name === ex.category);
+    if (row) row.amount += ex.amount;
+    else
       acc.push({
-        name: expense.category,
-        amount: expense.amount,
-        color: categoryColor,
+        name: ex.category,
+        amount: ex.amount,
+        color: categories.find((c) => c.name === ex.category)?.color || "#C9CBCF",
       });
-    }
     return acc;
   }, [] as SpendingCategory[]);
 
-  // Get selected category color
   const selectedCategoryColor =
-    categories.find((cat) => cat.name === selectedCategory)?.color || "#C9CBCF";
+    categories.find((c) => c.name === selectedCategory)?.color || "#C9CBCF";
 
+  //UI
   return (
-    <div
-      className={`min-h-screen bg-background transition-colors duration-300`}
-    >
+    <div className="min-h-screen bg-background transition-colors duration-300">
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
+        {/* header */}
         <header className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-foreground">CVSaves</h1>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={toggleTheme}
-            aria-label="Toggle theme"
-          >
-            {darkMode ? (
-              <SunIcon className="h-5 w-5" />
-            ) : (
-              <MoonIcon className="h-5 w-5" />
-            )}
+          <Button variant="outline" size="icon" onClick={toggleTheme}>
+            {darkMode ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
           </Button>
         </header>
 
-        {/* Month Selector */}
+        {/* month selector */}
         <section className="mb-8">
           <MonthSelector
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
-            onMonthChange={handleMonthChange}
+            onMonthChange={(m, y) => { setSelectedMonth(m); setSelectedYear(y); }}
           />
         </section>
 
-        {/* Budget Summary Cards */}
+        {/* summary */}
         <section className="mb-8">
           <BudgetSummary
-            income={currentMonthData.income}
-            budget={currentMonthData.budget}
+            income={meta.income}
+            budget={meta.budget}
             expenses={totalExpenses}
             remaining={remainingBudget}
-            onIncomeClick={() => {}}
+            onIncomeClick={() => { }}
             onBudgetChange={handleBudgetChange}
             onIncomeChange={handleIncomeChange}
           />
         </section>
 
+        {/* main */}
         {selectedCategory ? (
-          /* Category Details View */
           <section>
             <CategoryDetails
               category={selectedCategory}
               expenses={filteredExpenses}
-              onBack={handleBackToOverview}
+              onBack={() => setSelectedCategory(null)}
               onDeleteExpense={handleDeleteExpense}
+              onExpenseUpdated={handleExpenseUpdated}
             />
           </section>
         ) : (
-          /* Main Content - Chart and Expense Manager */
           <>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-              {/* Spending Chart */}
-              <section>
-                <SpendingChart
-                  categories={spendingByCategory}
-                  totalSpending={totalExpenses}
-                  budget={currentMonthData.budget}
-                  onCategoryClick={handleCategoryClick}
-                  onCategoryColorChange={handleCategoryColorChange}
-                />
-              </section>
+              <SpendingChart
+                categories={spendingByCategory}
+                totalSpending={totalExpenses}
+                budget={meta.budget}
+                onCategoryClick={(c) => setSelectedCategory(c)}
+                onCategoryColorChange={handleCategoryColorChange}
+              />
 
-              {/* Expense Manager */}
-              <section>
-                <ExpenseManager
-                  budget={currentMonthData.budget}
-                  onBudgetChange={handleBudgetChange}
-                  expenses={filteredExpenses}
-                  onAddExpense={handleAddExpense}
-                  onDeleteExpense={handleDeleteExpense}
-                />
-              </section>
+              <ExpenseManager
+                budget={meta.budget}
+                onBudgetChange={handleBudgetChange}
+                expenses={filteredExpenses}
+                onAddExpense={handleAddExpense}
+                onDeleteExpense={handleDeleteExpense}
+              />
             </div>
-            {/* Additional Management Tools */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Data Manager */}
-              <section>
-                <DataManager
-                  expenses={expenses}
-                  monthlyIncome={currentMonthData.income}
-                  monthlyBudget={currentMonthData.budget}
-                  onClearAllData={handleClearAllData}
-                  onClearExpenses={handleClearExpenses}
-                  onExportData={handleExportData}
-                  onImportData={handleImportData}
-                />
-              </section>
-            </div>
+
+            <DataManager
+              expenses={expenses}
+              monthlyIncome={meta.income}
+              monthlyBudget={meta.budget}
+              onClearAllData={() => {
+                setExpenses([]);
+                setMeta({ income: 0, budget: 0 });
+              }}
+              onClearExpenses={() => setExpenses([])}
+              onExportData={() =>
+                toast({ title: "Data exported", description: "Downloaded" })
+              }
+              onImportData={() => { }}
+            />
           </>
         )}
 
-        {/* Category Breakdown Fly-out */}
         {selectedCategory && (
           <CategoryBreakdown
             isOpen={showCategoryBreakdown}
-            onClose={handleCloseCategoryBreakdown}
+            onClose={() => {
+              setShowCategoryBreakdown(false);
+              setSelectedCategory(null);
+            }}
             category={selectedCategory}
             categoryColor={selectedCategoryColor}
             expenses={filteredExpenses}

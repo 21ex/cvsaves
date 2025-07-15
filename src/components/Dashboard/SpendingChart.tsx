@@ -1,191 +1,196 @@
-import React, { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import React, { useState, useRef } from "react";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { DollarSign, Percent, Palette } from "lucide-react";
 import {
   Popover,
-  PopoverContent,
   PopoverTrigger,
+  PopoverContent,
 } from "@/components/ui/popover";
-import { Palette, Percent, DollarSign } from "lucide-react";
-import { Category } from "@/types/supabase";
 
-interface SpendingCategory {
+import {
+  Chart as ChartJS,
+  ArcElement,
+  Legend,
+  Tooltip as ChartTooltip,
+  ActiveElement,
+  TooltipItem,
+} from "chart.js";
+import { Doughnut } from "react-chartjs-2";
+
+ChartJS.register(ArcElement, Legend, ChartTooltip);
+
+//popup when hovering
+const OFFSET = 18;
+(ChartTooltip as any).positioners.outsideArc = function (
+  this: any,
+  items: { element: any }[],
+) {
+  if (!items.length) return false;
+  const e = items[0].element;
+  const angle = (e.startAngle + e.endAngle) / 2;
+  const r = e.outerRadius + OFFSET;
+  return {
+    x: e.x + Math.cos(angle) * r,
+    y: e.y + Math.sin(angle) * r,
+  };
+};
+
+export interface SpendingCategory {
   name: string;
   amount: number;
   color: string;
 }
 
-interface SpendingChartProps {
-  categories?: SpendingCategory[];
-  totalSpending?: number;
-  budget?: number;
-  onCategoryClick?: (category: string) => void;
-  onCategoryColorChange?: (category: string, color: string) => void;
+interface Props {
+  categories: SpendingCategory[];
+  totalSpending: number;
+  budget: number;
+  onCategoryClick: (name: string) => void;
+  onCategoryColorChange: (name: string, color: string) => void;
 }
 
-const SpendingChart = ({
-  categories = [
-    { name: "Housing", amount: 1200, color: "#FF6384" },
-    { name: "Food", amount: 400, color: "#36A2EB" },
-    { name: "Transportation", amount: 200, color: "#FFCE56" },
-    { name: "Entertainment", amount: 150, color: "#4BC0C0" },
-    { name: "Utilities", amount: 250, color: "#9966FF" },
-  ],
-  totalSpending = 2200,
-  budget = 4000,
-  onCategoryClick = () => {},
-  onCategoryColorChange = () => {},
-}: SpendingChartProps) => {
-  const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null);
-  const [showPercentage, setShowPercentage] = useState(false);
-  // Calculate percentages for the donut chart
-  const calculateStrokeDasharray = (amount: number) => {
-    const percentage = (amount / totalSpending) * 100;
-    return `${percentage} ${100 - percentage}`;
+const SpendingChart: React.FC<Props> = ({
+  categories,
+  totalSpending,
+  budget,
+  onCategoryClick,
+  onCategoryColorChange,
+}) => {
+  const [showPct, setShowPct] = useState(false);
+  const chartRef = useRef<ChartJS>(null);
+  const [pickerOpen, setPickerOpen] = useState<string | null>(null);
+
+  //chart data
+  const data = {
+    labels: categories.map((c) => c.name),
+    datasets: [
+      {
+        data: categories.map((c) => c.amount),
+        backgroundColor: categories.map((c) => c.color),
+        borderWidth: 0,
+      },
+    ],
   };
 
-  // Calculate the stroke dash offset for each segment
-  const calculateStrokeDashoffset = (index: number) => {
-    let offset = 25; // Start at the top
-    for (let i = 0; i < index; i++) {
-      offset += (categories[i].amount / totalSpending) * 100;
-    }
-    return offset;
+  const format = (n: number) =>
+    showPct ? `${((n / totalSpending) * 100).toFixed(1)} %`
+      : `$${n.toFixed(2)}`;
+
+  const options = {
+    cutout: "62%",
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        position: "outsideArc",
+        displayColors: false,
+        callbacks: {
+          title: (ctx: TooltipItem<"doughnut">[]) => ctx[0].label || "",
+          label: (ctx: TooltipItem<"doughnut">) => format(ctx.parsed as number),
+        },
+      },
+    },
+    onClick: (_: any, elems: any[]) => {
+      if (elems.length) {
+        const idx = elems[0].index;
+        onCategoryClick(categories[idx].name);
+      }
+    },
+  };
+
+  //hiding the tooltip when cursor leaves the donut
+  const clearHover = () => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    chart.setActiveElements([] as ActiveElement[]);
+    chart.update();
   };
 
   return (
     <Card className="w-full h-full bg-background">
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-xl font-medium">
-            Spending Breakdown
-          </CardTitle>
+          <CardTitle>Spending Breakdown</CardTitle>
           <div className="flex items-center bg-muted rounded-md p-1">
             <Button
-              variant={!showPercentage ? "default" : "ghost"}
+              variant={!showPct ? "default" : "ghost"}
               size="sm"
-              onClick={() => setShowPercentage(false)}
               className="h-6 px-2"
+              onClick={() => setShowPct(false)}
             >
               <DollarSign className="h-3 w-3" />
             </Button>
             <Button
-              variant={showPercentage ? "default" : "ghost"}
+              variant={showPct ? "default" : "ghost"}
               size="sm"
-              onClick={() => setShowPercentage(true)}
               className="h-6 px-2"
+              onClick={() => setShowPct(true)}
             >
               <Percent className="h-3 w-3" />
             </Button>
           </div>
         </div>
       </CardHeader>
+
       <CardContent className="flex flex-col items-center">
-        {categories.length > 0 ? (
+        {categories.length ? (
           <>
-            <div className="relative w-48 h-48 mb-6">
-              {/* Empty circle as background */}
-              <svg className="w-full h-full" viewBox="0 0 100 100">
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="40"
-                  fill="transparent"
-                  stroke="#f1f1f1"
-                  strokeWidth="12"
-                />
+            {/* donut wrapper allows tooltip / highlight to overflow */}
+            <div
+              className="relative w-56 h-56 overflow-visible"
+              onMouseLeave={clearHover}
+            >
+              <Doughnut ref={chartRef} data={data} options={options as any} />
 
-                {/* Donut chart segments */}
-                {categories.map((category, index) => (
-                  <TooltipProvider key={category.name}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <circle
-                          cx="50"
-                          cy="50"
-                          r="40"
-                          fill="transparent"
-                          stroke={category.color}
-                          strokeWidth="12"
-                          strokeDasharray={`${calculateStrokeDasharray(category.amount)}`}
-                          strokeDashoffset={`${calculateStrokeDashoffset(index)}`}
-                          transform="rotate(-90 50 50)"
-                          style={{
-                            transition: "all 0.3s ease",
-                            cursor: "pointer",
-                          }}
-                          onClick={() => onCategoryClick(category.name)}
-                        />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>
-                          {category.name}:{" "}
-                          {showPercentage
-                            ? `${((category.amount / totalSpending) * 100).toFixed(1)}%`
-                            : `${category.amount.toFixed(2)}`}
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ))}
-
-                {/* Center text showing total */}
-                <text
-                  x="50"
-                  y="45"
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  className="text-lg font-medium fill-current"
-                >
-                  {showPercentage
-                    ? `${((totalSpending / budget) * 100).toFixed(0)}%`
-                    : `${totalSpending.toFixed(2)}`}
-                </text>
-                <text
-                  x="50"
-                  y="60"
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  className="text-xs fill-muted-foreground"
-                >
-                  {showPercentage ? "of budget" : "Total"}
-                </text>
-              </svg>
+              {/* centre labels */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-xl font-semibold">
+                  {showPct
+                    ? `${Math.round(
+                      Math.min((totalSpending / budget) * 100, 999),
+                    )} %`
+                    : `$${totalSpending.toFixed(2)}`}
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  {showPct ? "of budget" : "Total"}
+                </span>
+              </div>
             </div>
 
-            {/* Legend */}
-            <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {categories.map((category) => (
+            {/* legend */}
+            <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
+              {categories.map((cat) => (
                 <div
-                  key={category.name}
+                  key={cat.name}
                   className="flex items-center gap-2 p-2 rounded-md hover:bg-muted transition-colors group"
                 >
-                  <div
-                    className="w-3 h-3 rounded-full cursor-pointer"
-                    style={{ backgroundColor: category.color }}
-                    onClick={() => onCategoryClick(category.name)}
+                  <span
+                    style={{ background: cat.color }}
+                    className="w-3 h-3 rounded-full"
                   />
                   <span
-                    className="text-sm cursor-pointer flex-1"
-                    onClick={() => onCategoryClick(category.name)}
+                    className="text-sm flex-1 cursor-pointer"
+                    onClick={() => onCategoryClick(cat.name)}
                   >
-                    {category.name}
+                    {cat.name}
                   </span>
                   <span className="text-sm font-medium">
-                    {showPercentage
-                      ? `${((category.amount / totalSpending) * 100).toFixed(1)}%`
-                      : `${category.amount.toFixed(2)}`}
+                    {showPct
+                      ? `${((cat.amount / totalSpending) * 100).toFixed(1)} %`
+                      : `$${cat.amount.toFixed(2)}`}
                   </span>
+
+                  {/* color picker */}
                   <Popover
-                    open={colorPickerOpen === category.name}
+                    open={pickerOpen === cat.name}
                     onOpenChange={(open) =>
-                      setColorPickerOpen(open ? category.name : null)
+                      setPickerOpen(open ? cat.name : null)
                     }
                   >
                     <PopoverTrigger asChild>
@@ -198,23 +203,15 @@ const SpendingChart = ({
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-2">
-                      <div className="flex flex-col space-y-2">
-                        <label className="text-sm font-medium">
-                          Choose Color
-                        </label>
-                        <input
-                          type="color"
-                          value={category.color}
-                          onChange={(e) => {
-                            onCategoryColorChange(
-                              category.name,
-                              e.target.value,
-                            );
-                            setColorPickerOpen(null);
-                          }}
-                          className="w-16 h-8 rounded border cursor-pointer"
-                        />
-                      </div>
+                      <input
+                        type="color"
+                        value={cat.color}
+                        onChange={(e) => {
+                          onCategoryColorChange(cat.name, e.target.value);
+                          setPickerOpen(null);
+                        }}
+                        className="w-20 h-10 border rounded cursor-pointer"
+                      />
                     </PopoverContent>
                   </Popover>
                 </div>
@@ -222,26 +219,8 @@ const SpendingChart = ({
             </div>
           </>
         ) : (
-          <div className="flex flex-col items-center justify-center h-64 text-center">
-            <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center mb-4">
-              <svg
-                className="w-12 h-12 text-muted-foreground"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                />
-              </svg>
-            </div>
-            <h3 className="text-lg font-medium mb-2">No expenses yet</h3>
-            <p className="text-sm text-muted-foreground">
-              Add your first expense to see the spending breakdown
-            </p>
+          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+            No expenses yet
           </div>
         )}
       </CardContent>

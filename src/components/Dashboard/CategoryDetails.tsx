@@ -1,142 +1,178 @@
-import React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState } from "react";
+import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 
-interface Expense {
-  id: string;
-  amount: number;
+import { Transaction } from "@/types/supabase";
+import { updateExpense } from "@/lib/db";
+
+interface Props {
   category: string;
-  date: Date;
+  expenses: Transaction[];
+  onBack: () => void;
+  onDeleteExpense: (id: string) => void;
+  onExpenseUpdated: (e: Transaction) => void;
 }
 
-interface CategoryDetailsProps {
-  category?: string;
-  expenses?: Expense[];
-  onBack?: () => void;
-  onDeleteExpense?: (id: string) => void;
-}
-
-const CategoryDetails: React.FC<CategoryDetailsProps> = ({
-  category = "Food",
-  expenses = [
-    { id: "1", amount: 45.99, category: "Food", date: new Date(2023, 5, 12) },
-    { id: "2", amount: 25.5, category: "Food", date: new Date(2023, 5, 15) },
-    { id: "3", amount: 12.99, category: "Food", date: new Date(2023, 5, 18) },
-  ],
-  onBack = () => {},
-  onDeleteExpense = () => {},
+const CategoryDetails: React.FC<Props> = ({
+  category,
+  expenses,
+  onBack,
+  onDeleteExpense,
+  onExpenseUpdated,
 }) => {
-  const categoryExpenses = expenses.filter(
-    (expense) => expense.category === category,
-  );
-  const totalAmount = categoryExpenses.reduce(
-    (sum, expense) => sum + expense.amount,
-    0,
-  );
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Transaction | null>(null);
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
+  const startEdit = (ex: Transaction) => {
+    setEditing(ex);
+    setOpen(true);
   };
 
+  const iso = (d: string | Date) =>
+    typeof d === "string" ? d.slice(0, 10) : d.toISOString().slice(0, 10);
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    const updated = await updateExpense(editing.id, {
+      amount: editing.amount,
+      description: editing.description,
+      category: editing.category,
+      date: iso(editing.date),
+    });
+    onExpenseUpdated({ ...updated, date: new Date(updated.date) });
+    setOpen(false);
+
+    if (updated.category !== category) onBack();
+  };
+
+  const visible = expenses.filter((e) => e.category === category);
+
   return (
-    <Card className="w-full h-full bg-background">
-      <CardHeader className="flex flex-row items-center justify-between pb-4">
-        <div className="flex items-center space-x-4">
-          <Button variant="ghost" size="sm" onClick={onBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-          <div>
-            <CardTitle className="text-xl font-medium">
-              {category} Expenses
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {categoryExpenses.length} transactions •{" "}
-              {formatCurrency(totalAmount)} total
-            </p>
+    <>
+      {/* header */}
+      <div className="flex items-center gap-2 mb-4">
+        <Button variant="ghost" size="icon" onClick={onBack}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <h2 className="text-xl font-semibold">{category} Expenses</h2>
+        <span className="ml-auto rounded-md bg-muted px-3 py-1 text-sm font-medium">
+          {visible.length} transactions • $
+          {visible.reduce((s, e) => s + e.amount, 0).toFixed(2)} total
+        </span>
+      </div>
+
+      {/* list */}
+      <div className="space-y-4">
+        {visible.map((ex) => (
+          <div key={ex.id} className="border rounded-md p-4 flex items-center gap-4">
+            <div className="flex-1">
+              <p className="font-semibold">${ex.amount.toFixed(2)}</p>
+              {ex.description && (
+                <p className="text-muted-foreground text-sm">{ex.description}</p>
+              )}
+              <p className="text-muted-foreground text-sm">
+                {new Date(ex.date).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </p>
+            </div>
+
+            <Button variant="ghost" size="icon" onClick={() => startEdit(ex)}>
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => onDeleteExpense(ex.id)}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
-        </div>
-        <Badge variant="secondary" className="text-lg px-3 py-1">
-          {formatCurrency(totalAmount)}
-        </Badge>
-      </CardHeader>
-      <CardContent>
-        <ScrollArea className="h-[400px] rounded-md border">
-          <div className="p-4">
-            {categoryExpenses.length > 0 ? (
-              <div className="space-y-3">
-                {categoryExpenses
-                  .sort(
-                    (a, b) =>
-                      new Date(b.date).getTime() - new Date(a.date).getTime(),
-                  )
-                  .map((expense) => (
-                    <div
-                      key={expense.id}
-                      className="flex items-center justify-between p-3 rounded-md border hover:bg-muted transition-colors"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <p className="font-medium text-lg">
-                            {formatCurrency(expense.amount)}
-                          </p>
-                          <span className="text-sm text-muted-foreground">
-                            {format(expense.date, "MMM d, yyyy")}
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {format(expense.date, "EEEE 'at' h:mm a")}
-                        </p>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onDeleteExpense(expense.id)}
-                        className="hover:bg-destructive/10 ml-2"
-                      >
-                        <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-                      </Button>
-                    </div>
-                  ))}
+        ))}
+      </div>
+
+      {/* edit dialog */}
+      {editing && (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogHeader>
+            <DialogTitle>Edit Expense</DialogTitle>
+          </DialogHeader>
+
+          <DialogContent>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="amt">Amount ($)</Label>
+                <Input
+                  id="amt"
+                  type="number"
+                  step="0.01"
+                  value={editing.amount}
+                  onChange={(e) => setEditing({ ...editing, amount: +e.target.value })}
+                />
               </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-64 text-center">
-                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                  <svg
-                    className="w-8 h-8 text-muted-foreground"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-medium mb-2">
-                  No {category.toLowerCase()} expenses
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  No expenses found for this category in the selected period
-                </p>
+
+              <div>
+                <Label htmlFor="desc">Description</Label>
+                <Input
+                  id="desc"
+                  value={editing.description ?? ""}
+                  onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                />
               </div>
-            )}
-          </div>
-        </ScrollArea>
-      </CardContent>
-    </Card>
+
+              <div>
+                <Label>Category</Label>
+                <Select
+                  value={editing.category}
+                  onValueChange={(v) => setEditing({ ...editing, category: v })}
+                >
+                  <SelectTrigger />
+                  <SelectContent>
+                    {["Housing", "Food", "Transportation", "Entertainment", "Utilities", "Other"].map(
+                      (c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ),
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="date">Date</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={iso(editing.date)}
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      date: new Date(e.target.value).toISOString(),
+                    })
+                  }
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={saveEdit}>Save</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
   );
 };
 
