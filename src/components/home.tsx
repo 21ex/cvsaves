@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from "react";
 import { MoonIcon, SunIcon } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
 import { Button } from "./ui/button";
 import { Toaster } from "./ui/toaster";
 import { useToast } from "./ui/use-toast";
 
-import BudgetSummary     from "./Dashboard/BudgetSummary";
-import SpendingChart     from "./Dashboard/SpendingChart";
-import ExpenseManager    from "./Dashboard/ExpenseManager";
-import MonthSelector     from "./Dashboard/MonthSelector";
-import CategoryDetails   from "./Dashboard/CategoryDetails";
+/* dashboard sections */
+import BudgetSummary from "./Dashboard/BudgetSummary";
+import SpendingChart from "./Dashboard/SpendingChart";
+import ExpenseManager from "./Dashboard/ExpenseManager";
+import MonthSelector from "./Dashboard/MonthSelector";
+import CategoryDetails from "./Dashboard/CategoryDetails";
 import CategoryBreakdown from "./Dashboard/CategoryBreakdown";
-import DataManager       from "./Dashboard/DataManager";
+import DataManager from "./Dashboard/DataManager";
 
 import { useSessionContext } from "@supabase/auth-helpers-react";
 import {
@@ -24,11 +27,12 @@ import {
   updateCategoryColor,
   UserCategoryRow,
 } from "@/lib/db";
+import { signOut } from "@/lib/auth";
 
 import { Transaction } from "@/types/supabase";
 
-/* ---------- types ---------- */
-interface Expense extends Transaction {}
+/* ---------- local helpers ---------- */
+interface Expense extends Transaction { }
 interface SpendingCategory {
   name: string;
   amount: number;
@@ -37,33 +41,29 @@ interface SpendingCategory {
 
 const Home: React.FC = () => {
   const { session } = useSessionContext();
-  const { toast }   = useToast();
+  const { toast } = useToast();
+  const navigate = useNavigate();
 
   /* ---------- state ---------- */
   const [darkMode, setDarkMode] = useState(false);
+  const [meta, setMeta] = useState<{ income: number; budget: number }>({ income: 0, budget: 0 });
 
-  const [meta, setMeta] = useState<{ income: number; budget: number }>({
-    income: 0,
-    budget: 0,
-  });
-
-  const [expenses,   setExpenses]   = useState<Expense[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<UserCategoryRow[]>([]);
 
   const [selectedMonth, setSelectedMonth] = useState(
     new Date().toLocaleString("default", { month: "long" }),
   );
-  const [selectedYear,  setSelectedYear]  = useState(new Date().getFullYear());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
-  const [selectedCategory,      setSelectedCategory]      = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showCategoryBreakdown, setShowCategoryBreakdown] = useState(false);
 
-  /* month key like “2025-07” */
   const monthKey = `${selectedYear}-${String(
     new Date(Date.parse(`${selectedMonth} 1, 2000`)).getMonth() + 1,
   ).padStart(2, "0")}`;
 
-  /* ---------- first-run: dark-mode ---------- */
+  /* ---------- load dark-mode pref ---------- */
   useEffect(() => {
     const stored = localStorage.getItem("budgetApp_darkMode");
     if (stored) {
@@ -77,47 +77,31 @@ const Home: React.FC = () => {
   useEffect(() => {
     if (!session) return;
     (async () => {
-      try {
-        let rows = await getUserCategories(session.user.id);
-        if (!rows.length) {
-          await insertDefaultCategories(session.user.id);
-          rows = await getUserCategories(session.user.id);
-        }
-        setCategories(rows);
-      } catch (e: any) {
-        toast({
-          title: "Load categories failed",
-          description: e.message,
-          variant: "destructive",
-        });
+      let rows = await getUserCategories(session.user.id);
+      if (!rows.length) {
+        await insertDefaultCategories(session.user.id);
+        rows = await getUserCategories(session.user.id);
       }
-    })();
+      setCategories(rows);
+    })().catch(console.error);
   }, [session]);
 
-  /* ---------- load meta ---------- */
+  /* ---------- load monthly meta ---------- */
   useEffect(() => {
     if (!session) return;
-    (async () => {
-      try {
-        const row = await getMonthlyMeta(session.user.id, monthKey);
-        setMeta(row ?? { income: 0, budget: 0 });
-      } catch (e: any) {
-        console.error("fetch meta:", e.message);
-      }
-    })();
+    getMonthlyMeta(session.user.id, monthKey)
+      .then((row) => setMeta(row ?? { income: 0, budget: 0 }))
+      .catch(console.error);
   }, [session, monthKey]);
 
   /* ---------- load expenses ---------- */
   useEffect(() => {
     if (!session) return;
-    (async () => {
-      try {
-        const data = await getExpenses(session.user.id, monthKey);
-        setExpenses(data.map((e: any) => ({ ...e, date: new Date(e.date) })));
-      } catch (e: any) {
-        console.error("fetch expenses:", e.message);
-      }
-    })();
+    getExpenses(session.user.id, monthKey)
+      .then((data) =>
+        setExpenses(data.map((e: any) => ({ ...e, date: new Date(e.date) }))),
+      )
+      .catch(console.error);
   }, [session, monthKey]);
 
   /* ---------- persist dark-mode ---------- */
@@ -125,7 +109,7 @@ const Home: React.FC = () => {
     localStorage.setItem("budgetApp_darkMode", JSON.stringify(darkMode));
   }, [darkMode]);
 
-  /* ---------- handlers ---------- */
+  /* ---------- helpers ---------- */
   const toggleTheme = () => {
     const next = !darkMode;
     setDarkMode(next);
@@ -136,13 +120,9 @@ const Home: React.FC = () => {
     if (!session) return;
     try {
       const row = await addExpense(session.user.id, e);
-      setExpenses((prev) => [row, ...prev]);
+      setExpenses((p) => [row, ...p]);
     } catch (err: any) {
-      toast({
-        title: "Add failed",
-        description: err.message,
-        variant: "destructive",
-      });
+      toast({ title: "Add failed", description: err.message, variant: "destructive" });
     }
   };
 
@@ -154,17 +134,13 @@ const Home: React.FC = () => {
       await deleteExpense(id);
     } catch (err: any) {
       if (backup) setExpenses((p) => [backup, ...p]);
-      toast({
-        title: "Delete failed",
-        description: err.message,
-        variant: "destructive",
-      });
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     }
   };
 
   const saveMeta = async (next: { income: number; budget: number }) => {
     if (!session) return;
-    setMeta(next); // optimistic
+    setMeta(next);
     try {
       await upsertMonthlyMeta(session.user.id, monthKey, next);
     } catch (e: any) {
@@ -172,12 +148,12 @@ const Home: React.FC = () => {
     }
   };
   const handleBudgetChange = (v: number) => saveMeta({ income: meta.income, budget: v });
-  const handleIncomeChange = (v: number) => saveMeta({ income: v,           budget: meta.budget });
+  const handleIncomeChange = (v: number) => saveMeta({ income: v, budget: meta.budget });
 
   const handleCategoryColorChange = async (name: string, color: string) => {
     const row = categories.find((c) => c.name === name);
     if (!row) return;
-    setCategories((prev) => prev.map((c) => (c.id === row.id ? { ...c, color } : c)));
+    setCategories((p) => p.map((c) => (c.id === row.id ? { ...c, color } : c)));
     try {
       await updateCategoryColor(row.id, color);
     } catch (e: any) {
@@ -185,9 +161,8 @@ const Home: React.FC = () => {
     }
   };
 
-  /* receive edited expense from details dialog */
   const handleExpenseUpdated = (updated: Expense) => {
-    setExpenses((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+    setExpenses((p) => p.map((e) => (e.id === updated.id ? updated : e)));
   };
 
   /* ---------- derived ---------- */
@@ -199,7 +174,7 @@ const Home: React.FC = () => {
     );
   });
 
-  const totalExpenses   = filteredExpenses.reduce((s, ex) => s + ex.amount, 0);
+  const totalExpenses = filteredExpenses.reduce((s, ex) => s + ex.amount, 0);
   const remainingBudget = meta.budget - totalExpenses;
 
   const spendingByCategory = filteredExpenses.reduce((acc, ex) => {
@@ -207,10 +182,9 @@ const Home: React.FC = () => {
     if (row) row.amount += ex.amount;
     else
       acc.push({
-        name:  ex.category,
+        name: ex.category,
         amount: ex.amount,
-        color:
-          categories.find((c) => c.name === ex.category)?.color || "#C9CBCF",
+        color: categories.find((c) => c.name === ex.category)?.color || "#C9CBCF",
       });
     return acc;
   }, [] as SpendingCategory[]);
@@ -219,47 +193,53 @@ const Home: React.FC = () => {
     categories.find((c) => c.name === selectedCategory)?.color || "#C9CBCF";
 
   /* ---------- UI ---------- */
-
-  ; // <- terminate previous statement to let JSX parse correctly
   return (
     <div className="min-h-screen bg-background transition-colors duration-300">
       <div className="container mx-auto px-4 py-8">
-        {/* header */}
+        {/* ---------- header ---------- */}
         <header className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-foreground">CVSaves</h1>
-          <Button variant="outline" size="icon" onClick={toggleTheme}>
-            {darkMode ? (
-              <SunIcon className="h-5 w-5" />
-            ) : (
-              <MoonIcon className="h-5 w-5" />
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="icon" onClick={toggleTheme}>
+              {darkMode ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  await signOut();
+                  navigate("/login", { replace: true });
+                } catch (e: any) {
+                  toast({ title: "Log-out failed", description: e.message, variant: "destructive" });
+                }
+              }}
+            >
+              Log&nbsp;out
+            </Button>
+          </div>
         </header>
 
-        {/* month selector */}
+        {/* ---------- month selector ---------- */}
         <MonthSelector
           selectedMonth={selectedMonth}
           selectedYear={selectedYear}
-          onMonthChange={(m, y) => {
-            setSelectedMonth(m);
-            setSelectedYear(y);
-          }}
+          onMonthChange={(m, y) => { setSelectedMonth(m); setSelectedYear(y); }}
         />
 
-        {/* summary */}
+        {/* ---------- budget summary ---------- */}
         <div className="my-8">
           <BudgetSummary
             income={meta.income}
             budget={meta.budget}
             expenses={totalExpenses}
             remaining={remainingBudget}
-            onIncomeClick={() => {}}
+            onIncomeClick={() => { }}
             onBudgetChange={handleBudgetChange}
             onIncomeChange={handleIncomeChange}
           />
         </div>
 
-        {/* main */}
+        {/* ---------- main area ---------- */}
         {selectedCategory ? (
           <CategoryDetails
             category={selectedCategory}
@@ -301,12 +281,12 @@ const Home: React.FC = () => {
               onExportData={() =>
                 toast({ title: "Data exported", description: "Downloaded" })
               }
-              onImportData={() => {}}
+              onImportData={() => { }}
             />
           </>
         )}
 
-        {/* fly-out */}
+        {/* ---------- fly-out breakdown ---------- */}
         {selectedCategory && (
           <CategoryBreakdown
             isOpen={showCategoryBreakdown}
