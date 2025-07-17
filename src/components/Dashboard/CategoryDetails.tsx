@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,12 +20,11 @@ import {
 import { Transaction } from "@/types/supabase";
 import { updateExpense } from "@/lib/db";
 
-/* ------------------------------------------------------------------ */
-
+/* ───────────────── types ───────────────── */
 interface Props {
-  category: string;                // currently viewed category
-  expenses: Transaction[];         // all expenses for the selected month
-  categories: string[];            // **full list** of category names
+  category: string;
+  expenses: Transaction[];
+  categories: string[];
   onBack: () => void;
   onDeleteExpense: (id: string) => void;
   onExpenseUpdated: (exp: Transaction) => void;
@@ -40,43 +38,36 @@ const CategoryDetails: React.FC<Props> = ({
   onDeleteExpense,
   onExpenseUpdated,
 }) => {
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
 
-  const isoDate = (d: string | Date) =>
+  const iso = (d: string | Date) =>
     typeof d === "string" ? d.slice(0, 10) : d.toISOString().slice(0, 10);
 
-  /* ---------- edit helpers ---------- */
+  /* ---- edit helpers ---- */
   const startEdit = (ex: Transaction) => {
     setEditing(ex);
-    setDialogOpen(true);
+    setOpen(true);
   };
 
-  const saveEdit = async () => {
+  const save = async () => {
     if (!editing) return;
-
     const updated = await updateExpense(editing.id, {
-      ...editing,
-      date: isoDate(editing.date),   // store ISO string in DB
+      amount: editing.amount,
+      description: editing.description,
+      category: editing.category,
+      date: iso(editing.date),
     });
-
-    onExpenseUpdated({
-      ...updated,
-      date: new Date(updated.date),  // convert back for local state
-    });
-    setDialogOpen(false);
-
-    /* If the user moved the expense to a DIFFERENT category,
-       go back to the overview so the list stays in sync. */
+    onExpenseUpdated({ ...updated, date: new Date(updated.date) });
+    setOpen(false);
     if (updated.category !== category) onBack();
   };
 
-  /* Only expenses still belonging to this category */
   const visible = expenses.filter((e) => e.category === category);
 
   return (
     <>
-      {/* ---------- header ---------- */}
+      {/* header */}
       <div className="flex items-center gap-2 mb-4">
         <Button variant="ghost" size="icon" onClick={onBack}>
           <ArrowLeft className="h-4 w-4" />
@@ -88,22 +79,15 @@ const CategoryDetails: React.FC<Props> = ({
         </span>
       </div>
 
-      {/* ---------- list ---------- */}
+      {/* list */}
       <div className="space-y-4">
         {visible.map((ex) => (
-          <div
-            key={ex.id}
-            className="border rounded-md p-4 flex items-center gap-4"
-          >
+          <div key={ex.id} className="border rounded-md p-4 flex items-center gap-4">
             <div className="flex-1">
               <p className="font-semibold">${ex.amount.toFixed(2)}</p>
-
               {ex.description && (
-                <p className="text-muted-foreground text-sm">
-                  {ex.description}
-                </p>
+                <p className="text-muted-foreground text-sm">{ex.description}</p>
               )}
-
               <p className="text-muted-foreground text-sm">
                 {new Date(ex.date).toLocaleDateString(undefined, {
                   month: "short",
@@ -112,7 +96,6 @@ const CategoryDetails: React.FC<Props> = ({
                 })}
               </p>
             </div>
-
             <Button variant="ghost" size="icon" onClick={() => startEdit(ex)}>
               <Pencil className="h-4 w-4" />
             </Button>
@@ -128,9 +111,9 @@ const CategoryDetails: React.FC<Props> = ({
         ))}
       </div>
 
-      {/* ---------- edit dialog ---------- */}
+      {/* edit dialog */}
       {editing && (
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent className="max-w-sm">
             <DialogHeader>
               <DialogTitle>Edit Expense</DialogTitle>
@@ -139,9 +122,8 @@ const CategoryDetails: React.FC<Props> = ({
             <div className="space-y-4">
               {/* amount */}
               <div>
-                <Label htmlFor="amt">Amount ($)</Label>
+                <Label>Amount ($)</Label>
                 <Input
-                  id="amt"
                   type="number"
                   step="0.01"
                   value={editing.amount}
@@ -153,9 +135,8 @@ const CategoryDetails: React.FC<Props> = ({
 
               {/* description */}
               <div>
-                <Label htmlFor="desc">Description</Label>
+                <Label>Description</Label>
                 <Input
-                  id="desc"
                   value={editing.description ?? ""}
                   onChange={(e) =>
                     setEditing({ ...editing, description: e.target.value })
@@ -185,11 +166,10 @@ const CategoryDetails: React.FC<Props> = ({
 
               {/* date */}
               <div>
-                <Label htmlFor="date">Date</Label>
+                <Label>Date</Label>
                 <Input
-                  id="date"
                   type="date"
-                  value={isoDate(editing.date)}
+                  value={iso(editing.date)}
                   onChange={(e) =>
                     setEditing({
                       ...editing,
@@ -199,12 +179,11 @@ const CategoryDetails: React.FC<Props> = ({
                 />
               </div>
 
-              {/* actions */}
               <div className="pt-2 flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                <Button variant="outline" onClick={() => setOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={saveEdit}>Save</Button>
+                <Button onClick={save}>Save</Button>
               </div>
             </div>
           </DialogContent>

@@ -1,291 +1,286 @@
+/* src/components/Dashboard/ExpenseManager.tsx
+   – fixed version 2025-07-16
+*/
 import React, { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { format } from "date-fns";
+import {
+  PlusCircle,
+  Trash2,
+  Calendar as CalendarIcon,
+} from "lucide-react";
+
+/* ── shadcn/ui primitives ───────────────────────────── */
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
-  SelectContent,
-  SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectContent,
+  SelectItem,
 } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
-  PopoverContent,
   PopoverTrigger,
+  PopoverContent,
 } from "@/components/ui/popover";
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogContent,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { format } from "date-fns";
-import { CalendarIcon, PlusCircle, Edit2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+/* ───────────────────────────────────────────────────── */
+
 import { Transaction } from "@/types/supabase";
 
-interface Expense extends Transaction {}
+/* ---------- types ---------- */
+interface Expense extends Transaction { }
+interface Props {
+  /* budget meta */
+  budget: number;
+  onBudgetChange: (v: number) => void;
 
-interface ExpenseManagerProps {
-  budget?: number;
-  onBudgetChange?: (budget: number) => void;
-  expenses?: Expense[];
-  onAddExpense?: (expense: Omit<Expense, "id">) => void;
-  onDeleteExpense?: (id: string) => void;
+  /* live expense list */
+  expenses: Expense[];
+
+  /* add / delete hooks */
+  onAddExpense: (e: Omit<Expense, "id">) => void;
+  onDeleteExpense: (id: string) => void;
+
+  /* category names provided by Home so it’s always current */
+  categories: string[];
 }
 
-const ExpenseManager: React.FC<ExpenseManagerProps> = ({
-  budget = 1000,
-  onBudgetChange = () => {},
-  expenses = [
-    { id: "1", amount: 45.99, category: "Food", date: new Date(2023, 5, 12) },
-    {
-      id: "2",
-      amount: 120,
-      category: "Transportation",
-      date: new Date(2023, 5, 15),
-    },
-    {
-      id: "3",
-      amount: 65.5,
-      category: "Entertainment",
-      date: new Date(2023, 5, 18),
-    },
-  ],
-  onAddExpense = () => {},
-  onDeleteExpense = () => {},
+const ExpenseManager: React.FC<Props> = ({
+  budget,
+  onBudgetChange,
+  expenses,
+  onAddExpense,
+  onDeleteExpense,
+  categories,
 }) => {
+  /* form state */
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState<Date | undefined>(new Date());
-  const [isBudgetDialogOpen, setIsBudgetDialogOpen] = useState(false);
-  const [newBudget, setNewBudget] = useState(budget.toString());
 
-  const categories = [
-    "Food",
-    "Transportation",
-    "Entertainment",
-    "Housing",
-    "Utilities",
-    "Healthcare",
-    "Shopping",
-    "Other",
-  ];
+  /* edit-budget dialog */
+  const [dlgOpen, setDlgOpen] = useState(false);
+  const [draftBudg, setDraftBudg] = useState(budget.toString());
 
-  const handleAddExpense = () => {
-    if (!amount || !category || !date) return;
-
-    const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      return;
-    }
-
-    onAddExpense({
-      amount: parsedAmount,
-      category,
-      description,
-      date,
-    });
-
-    // Reset form
+  /* ---------- helpers ---------- */
+  const resetForm = () => {
     setAmount("");
     setCategory("");
     setDescription("");
     setDate(new Date());
   };
 
-  const handleBudgetSave = () => {
-    const parsedBudget = parseFloat(newBudget);
-    if (!isNaN(parsedBudget) && parsedBudget >= 0) {
-      onBudgetChange(parsedBudget);
-      setIsBudgetDialogOpen(false);
-    }
+  const handleAdd = () => {
+    const val = parseFloat(amount);
+    if (!val || val <= 0 || !category || !date) return;
+    onAddExpense({ amount: val, category, description, date });
+    resetForm();
   };
 
+  /* ---------- UI ---------- */
   return (
-    <Card className="w-full h-full bg-background">
+    <Card className="w-full h-full">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-xl font-medium">Expense Manager</CardTitle>
-        <div className="flex items-center space-x-2">
+        <CardTitle className="text-xl">Expense Manager</CardTitle>
+
+        <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
-            Budget: ${budget.toFixed(2)}
+            Budget:&nbsp;${budget.toFixed(2)}
           </span>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => {
-              setNewBudget(budget.toString());
-              setIsBudgetDialogOpen(true);
+              setDraftBudg(budget.toString());
+              setDlgOpen(true);
             }}
           >
-            <Edit2 className="h-4 w-4" />
+            <PlusCircle className="h-4 w-4 rotate-45" />
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="amount">Amount</Label>
-              <Input
-                id="amount"
-                type="number"
-                placeholder="0.00"
-                min="0"
-                step="0.01"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="category">Category</Label>
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger id="category">
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Input
-                id="description"
-                type="text"
-                placeholder="Coffee at Starbucks"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="date">Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    id="date"
-                    variant="outline"
-                    className="w-full justify-start text-left font-normal"
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {date ? format(date, "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={date}
-                    onSelect={setDate}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
-
-          <Button
-            className="w-full"
-            onClick={handleAddExpense}
-            disabled={!amount || !category || !date || parseFloat(amount) <= 0}
-          >
-            <PlusCircle className="mr-2 h-4 w-4" /> Add Expense
-          </Button>
-
-          <div className="mt-6">
-            <h3 className="text-sm font-medium mb-2">Recent Expenses</h3>
-            <ScrollArea className="h-[200px] rounded-md border">
-              <div className="p-4">
-                {expenses.length > 0 ? (
-                  <ul className="space-y-3">
-                    {expenses
-                      .sort(
-                        (a, b) =>
-                          new Date(b.date).getTime() -
-                          new Date(a.date).getTime(),
-                      )
-                      .map((expense) => (
-                        <li
-                          key={expense.id}
-                          className="flex items-center justify-between p-2 rounded-md hover:bg-muted"
-                        >
-                          <div>
-                            <p className="font-medium">
-                              ${expense.amount.toFixed(2)}
-                            </p>
-                            {expense.description && (
-                              <p className="text-sm text-foreground">
-                                {expense.description}
-                              </p>
-                            )}
-                            <p className="text-sm text-muted-foreground">
-                              {expense.category}
-                            </p>
-                          </div>
-                          <div className="flex items-center">
-                            <span className="text-xs text-muted-foreground mr-2">
-                              {format(expense.date, "MMM d, yyyy")}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => onDeleteExpense(expense.id)}
-                              className="hover:bg-destructive/10"
-                            >
-                              <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-                            </Button>
-                          </div>
-                        </li>
-                      ))}
-                  </ul>
-                ) : (
-                  <p className="text-center text-muted-foreground py-4">
-                    No expenses yet
-                  </p>
-                )}
-              </div>
-            </ScrollArea>
-          </div>
-        </div>
-      </CardContent>
-
-      <Dialog open={isBudgetDialogOpen} onOpenChange={setIsBudgetDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Adjust Budget</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="budget">Monthly Budget</Label>
+      <CardContent className="space-y-4">
+        {/* form fields */}
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="amt">Amount</Label>
             <Input
-              id="budget"
+              id="amt"
               type="number"
               min="0"
               step="0.01"
-              value={newBudget}
-              onChange={(e) => setNewBudget(e.target.value)}
-              className="mt-2"
+              placeholder="0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
             />
           </div>
-          <DialogFooter>
+
+          <div>
+            <Label>Category</Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <Label>Description</Label>
+            <Input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Description (optional)"
+            />
+          </div>
+
+          <div>
+            <Label>Date</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !date && "text-muted-foreground",
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {date ? format(date, "PPP") : "Pick a date"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={date}
+                  onSelect={setDate}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+
+        <Button
+          className="w-full"
+          disabled={!amount || !category || !date || +amount <= 0}
+          onClick={handleAdd}
+        >
+          <PlusCircle className="mr-2 h-4 w-4" /> Add Expense
+        </Button>
+
+        {/* recent list */}
+        <div>
+          <h3 className="text-sm font-medium mb-2">Recent Expenses</h3>
+          <ScrollArea className="h-[200px] rounded-md border">
+            <div className="p-4 space-y-3">
+              {expenses.length === 0 && (
+                <p className="text-center text-muted-foreground py-4">
+                  No expenses yet
+                </p>
+              )}
+              {expenses
+                .slice()
+                .sort(
+                  (a, b) =>
+                    new Date(b.date).getTime() - new Date(a.date).getTime(),
+                )
+                .map((ex) => (
+                  <div
+                    key={ex.id}
+                    className="flex items-center justify-between p-2 rounded-md hover:bg-muted"
+                  >
+                    <div>
+                      <p className="font-medium">${ex.amount.toFixed(2)}</p>
+                      {ex.description && (
+                        <p className="text-sm">{ex.description}</p>
+                      )}
+                      <p className="text-sm text-muted-foreground">
+                        {ex.category}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        {format(ex.date, "MMM d, yyyy")}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onDeleteExpense(ex.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </ScrollArea>
+        </div>
+      </CardContent>
+
+      {/* ===== budget dialog ===== */}
+      <Dialog open={dlgOpen} onOpenChange={setDlgOpen}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Adjust budget</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label>Monthly budget ($)</Label>
+            <Input
+              value={draftBudg}
+              type="number"
+              min="0"
+              step="0.01"
+              onChange={(e) => setDraftBudg(e.target.value)}
+            />
+          </div>
+
+          <DialogFooter className="pt-4">
             <Button
               variant="outline"
-              onClick={() => setIsBudgetDialogOpen(false)}
+              onClick={() => setDlgOpen(false)}
             >
               Cancel
             </Button>
-            <Button onClick={handleBudgetSave}>Save</Button>
+            <Button
+              onClick={() => {
+                const v = parseFloat(draftBudg);
+                if (!isNaN(v) && v >= 0) onBudgetChange(v);
+                setDlgOpen(false);
+              }}
+            >
+              Save
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
