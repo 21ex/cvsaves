@@ -1,5 +1,10 @@
 import { supabase } from "./supabase";
 
+/* helper ────────────────────────────────────────────── */
+/** Always store plain `YYYY-MM-DD` regardless of local tz. */
+const toDateString = (d: Date | string) =>
+  typeof d === "string" ? d.slice(0, 10) : d.toISOString().slice(0, 10);
+
 /* ───────── EXPENSES ───────── */
 
 export async function getExpenses(userId: string, monthKey: string) {
@@ -25,7 +30,13 @@ export async function addExpense(
 ) {
   const { data, error } = await supabase
     .from("expenses")
-    .insert([{ ...expense, user_id: userId }])
+    .insert([
+      {
+        ...expense,
+        user_id: userId,
+        date: toDateString(expense.date),   // 👈 fixes off-by-one
+      },
+    ])
     .select()
     .single();
 
@@ -41,7 +52,10 @@ export async function deleteExpense(id: string) {
 export async function updateExpense(id: string, fields: any) {
   const { data, error } = await supabase
     .from("expenses")
-    .update(fields)
+    .update({
+      ...fields,
+      date: toDateString(fields.date),      // 👈 fixes off-by-one
+    })
     .eq("id", id)
     .select()
     .single();
@@ -122,10 +136,8 @@ export async function updateCategoryColor(id: string, color: string) {
   if (error) throw error;
 }
 
-/* NEW / fixed helpers
-   ──────────────────── */
+/* extra helpers (unchanged) ─────────────────────────── */
 
-/** create and return a new category row */
 export async function addCategory(
   userId: string,
   name: string,
@@ -141,17 +153,18 @@ export async function addCategory(
   return data as UserCategoryRow;
 }
 
-/** rename by id (userId not required) */
 export async function renameCategory(id: string, newName: string) {
   const { error } = await supabase
     .from("user_categories")
     .update({ name: newName })
     .eq("id", id);
-
   if (error) throw error;
 }
 
 export async function deleteCategory(id: string) {
-  const { error } = await supabase.from("user_categories").delete().eq("id", id);
+  const { error } = await supabase
+    .from("user_categories")
+    .delete()
+    .eq("id", id);
   if (error) throw error;
 }

@@ -1,5 +1,5 @@
 /* src/components/home.tsx – 2025-07-16
-   full file –  ❗ only the category-rename logic changed (see dialog section) */
+   Minimal date-offset fix (see getExpenses use-effect + addExpLocal) */
 
 import React, { useEffect, useState } from "react";
 import {
@@ -10,7 +10,7 @@ import {
   Trash2,
 } from "lucide-react";
 
-/* shadcn/ui */
+/* ── shadcn/ui ─────────────────────────── */
 import { Button } from "./ui/button";
 import { Toaster } from "./ui/toaster";
 import { useToast } from "./ui/use-toast";
@@ -22,7 +22,7 @@ import {
 } from "./ui/dialog";
 import { Input } from "./ui/input";
 
-/* dashboard */
+/* ── dashboard sections ────────────────── */
 import BudgetSummary from "./Dashboard/BudgetSummary";
 import SpendingChart from "./Dashboard/SpendingChart";
 import ExpenseManager from "./Dashboard/ExpenseManager";
@@ -30,7 +30,7 @@ import MonthSelector from "./Dashboard/MonthSelector";
 import CategoryDetails from "./Dashboard/CategoryDetails";
 import DataManager from "./Dashboard/DataManager";
 
-/* data / auth */
+/* ── data / auth ───────────────────────── */
 import { useSessionContext } from "@supabase/auth-helpers-react";
 import { supabase } from "@/lib/supabase";
 import {
@@ -50,18 +50,22 @@ import {
 } from "@/lib/db";
 import { Transaction } from "@/types/supabase";
 
-/* helpers */
+/* ---------- helpers ---------- */
 interface Expense extends Transaction { }
-interface SpendingCategory { name: string; amount: number; color: string }
+interface SpendingCategory {
+  name: string;
+  amount: number;
+  color: string;
+}
 const rand = () =>
   "#" + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, "0");
 
-/* ─────────────────────────────── */
+/* ───────────────── component ──────────── */
 const Home: React.FC = () => {
   const { session } = useSessionContext();
   const { toast } = useToast();
 
-  /* state */
+  /* ----- state ----- */
   const [dark, setDark] = useState(false);
   const [meta, setMeta] = useState({ income: 0, budget: 0 });
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -79,7 +83,7 @@ const Home: React.FC = () => {
     new Date(Date.parse(`${month} 1, 2000`)).getMonth() + 1,
   ).padStart(2, "0")}`;
 
-  /* dark-mode pref */
+  /* ----- dark-mode ----- */
   useEffect(() => {
     const s = localStorage.getItem("budget_dark");
     if (s) {
@@ -93,7 +97,7 @@ const Home: React.FC = () => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 
-  /* categories */
+  /* ----- categories ----- */
   useEffect(() => {
     if (!session) return;
     (async () => {
@@ -106,7 +110,7 @@ const Home: React.FC = () => {
     })().catch(console.error);
   }, [session]);
 
-  /* monthly meta */
+  /* ----- monthly meta ----- */
   useEffect(() => {
     if (!session) return;
     (async () => {
@@ -115,38 +119,55 @@ const Home: React.FC = () => {
     })().catch(console.error);
   }, [session, monthKey]);
 
-  /* expenses */
+  /* ----- expenses  (➜ local-midnight parse) ----- */
   useEffect(() => {
     if (!session) return;
     (async () => {
       const data = await getExpenses(session.user.id, monthKey);
-      setExpenses(data.map((e: any) => ({ ...e, date: new Date(e.date) })));
+      setExpenses(
+        data.map((e: any) => ({
+          ...e,
+          date: new Date(e.date + "T00:00:00"),
+        })),
+      );
     })().catch(console.error);
   }, [session, monthKey]);
 
-  /* helpers */
+  /* ----- helpers ----- */
   const notify = (t: string, d?: string) =>
     toast({ title: t, description: d, variant: d ? "destructive" : "default" });
 
   async function saveMeta(next: { income: number; budget: number }) {
     if (!session) return;
     setMeta(next);
-    try { await upsertMonthlyMeta(session.user.id, monthKey, next); }
-    catch (e: any) { notify("Save failed", e.message); }
+    try {
+      await upsertMonthlyMeta(session.user.id, monthKey, next);
+    } catch (e: any) {
+      notify("Save failed", e.message);
+    }
   }
 
   async function doLogout() {
-    try { await supabase.auth.signOut(); }
-    finally { location.reload(); }
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      location.reload();
+    }
   }
 
-  /* expense CRUD (unchanged) */
+  /* ----- expense CRUD ----- */
   function addExpLocal(e: Omit<Expense, "id">) {
     if (!session) return;
     addExpense(session.user.id, e)
-      .then((row) => setExpenses((p) => [row, ...p]))
+      .then((row) =>
+        setExpenses((p) => [
+          { ...row, date: new Date(row.date + "T00:00:00") } as Expense,
+          ...p,
+        ]),
+      )
       .catch((err) => notify("Add failed", err.message));
   }
+
   function delExpLocal(id: string) {
     const bak = expenses.find((x) => x.id === id);
     setExpenses((p) => p.filter((x) => x.id !== id));
@@ -155,6 +176,7 @@ const Home: React.FC = () => {
       if (bak) setExpenses((p) => [bak, ...p]);
     });
   }
+
   function updExpLocal(e: Expense) {
     updateExpense(e.id, {
       amount: e.amount,
@@ -166,29 +188,39 @@ const Home: React.FC = () => {
       .catch((err) => notify("Save failed", err.message));
   }
 
-  /* category helpers */
+  /* ----- category helpers ----- */
   async function addCat(name: string) {
     if (!session) return;
     try {
       const r = await addCategory(session.user.id, name, rand());
       setCats((p) => [...p, r]);
-    } catch (e: any) { notify("Add failed", e.message); }
+    } catch (e: any) {
+      notify("Add failed", e.message);
+    }
   }
   async function renameCatSafe(id: string, name: string) {
     if (!session) return;
-    if (!name.trim()) return;                     // guard empty
+    if (!name.trim()) return;
     try {
       await renameCategory(id, name.trim());
-      setCats((p) => p.map((c) => (c.id === id ? { ...c, name: name.trim() } : c)));
-    } catch (e: any) { notify("Rename failed", e.message); }
+      setCats((p) =>
+        p.map((c) => (c.id === id ? { ...c, name: name.trim() } : c)),
+      );
+    } catch (e: any) {
+      notify("Rename failed", e.message);
+    }
   }
   async function deleteCat(id: string) {
     if (!session) return;
-    try { await deleteCategory(id); setCats((p) => p.filter((c) => c.id !== id)); }
-    catch (e: any) { notify("Delete failed", e.message); }
+    try {
+      await deleteCategory(id);
+      setCats((p) => p.filter((c) => c.id !== id));
+    } catch (e: any) {
+      notify("Delete failed", e.message);
+    }
   }
 
-  /* derived */
+  /* ----- derived values ----- */
   const monthEx = expenses.filter((e) => {
     const d = new Date(e.date);
     return (
@@ -198,6 +230,7 @@ const Home: React.FC = () => {
   });
   const sum = monthEx.reduce((s, e) => s + e.amount, 0);
   const remain = meta.budget - sum;
+
   const byCat = monthEx.reduce<SpendingCategory[]>((a, e) => {
     const row = a.find((x) => x.name === e.category);
     if (row) row.amount += e.amount;
@@ -224,7 +257,9 @@ const Home: React.FC = () => {
             <Button variant="outline" size="icon" onClick={() => setDark(!dark)}>
               {dark ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
             </Button>
-            <Button variant="secondary" onClick={doLogout}>Log out</Button>
+            <Button variant="secondary" onClick={doLogout}>
+              Log out
+            </Button>
           </div>
         </header>
 
@@ -232,7 +267,10 @@ const Home: React.FC = () => {
         <MonthSelector
           selectedMonth={month}
           selectedYear={year}
-          onMonthChange={(m, y) => { setMonth(m); setYear(y); }}
+          onMonthChange={(m, y) => {
+            setMonth(m);
+            setYear(y);
+          }}
         />
 
         {/* summary */}
@@ -270,12 +308,16 @@ const Home: React.FC = () => {
                   const row = cats.find((c) => c.name === name);
                   if (!row) return;
                   await updateCategoryColor(row.id, color);
-                  setCats((p) => p.map((c) => (c.id === row.id ? { ...c, color } : c)));
+                  setCats((p) =>
+                    p.map((c) => (c.id === row.id ? { ...c, color } : c)),
+                  );
                 }}
               />
               <ExpenseManager
                 budget={meta.budget}
-                onBudgetChange={(v) => saveMeta({ income: meta.income, budget: v })}
+                onBudgetChange={(v) =>
+                  saveMeta({ income: meta.income, budget: v })
+                }
                 expenses={monthEx}
                 onAddExpense={addExpLocal}
                 onDeleteExpense={delExpLocal}
@@ -287,7 +329,10 @@ const Home: React.FC = () => {
               expenses={expenses}
               monthlyIncome={meta.income}
               monthlyBudget={meta.budget}
-              onClearAllData={() => { setExpenses([]); setMeta({ income: 0, budget: 0 }); }}
+              onClearAllData={() => {
+                setExpenses([]);
+                setMeta({ income: 0, budget: 0 });
+              }}
               onClearExpenses={() => setExpenses([])}
               onExportData={() => notify("Data exported")}
               onImportData={() => { }}
@@ -296,10 +341,12 @@ const Home: React.FC = () => {
         )}
       </div>
 
-      {/* ░░ Category dialog – **only this block changed** ░░ */}
+      {/* ── Manage categories dialog ── */}
       <Dialog open={catDlg} onOpenChange={setCatDlg}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Manage categories</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Manage categories</DialogTitle>
+          </DialogHeader>
 
           <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
             {cats.map((c) => (
@@ -311,7 +358,9 @@ const Home: React.FC = () => {
                     const col = rand();
                     await updateCategoryColor(c.id, col);
                     setCats((p) =>
-                      p.map((x) => (x.id === c.id ? { ...x, color: col } : x)),
+                      p.map((x) =>
+                        x.id === c.id ? { ...x, color: col } : x,
+                      ),
                     );
                   }}
                 />
@@ -322,7 +371,7 @@ const Home: React.FC = () => {
                   className="h-7"
                   onBlur={(e) => {
                     const v = e.target.value.trim();
-                    if (!v || v === c.name) return;   // empty or unchanged
+                    if (!v || v === c.name) return;
                     renameCatSafe(c.id, v);
                   }}
                 />

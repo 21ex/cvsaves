@@ -1,3 +1,6 @@
+/* src/components/Dashboard/CategoryDetails.tsx
+   – date-shift fix (2025-07-17)                                        */
+
 import React, { useState } from "react";
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,7 +23,7 @@ import {
 import { Transaction } from "@/types/supabase";
 import { updateExpense } from "@/lib/db";
 
-/* ───────────────── types ───────────────── */
+/* ---------- props ---------- */
 interface Props {
   category: string;
   expenses: Transaction[];
@@ -39,14 +42,14 @@ const CategoryDetails: React.FC<Props> = ({
   onExpenseUpdated,
 }) => {
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<Transaction | null>(null);
+  const [editing, setEdit] = useState<Transaction | null>(null);
 
   const iso = (d: string | Date) =>
     typeof d === "string" ? d.slice(0, 10) : d.toISOString().slice(0, 10);
 
-  /* ---- edit helpers ---- */
+  /* ----- edit helpers ----- */
   const startEdit = (ex: Transaction) => {
-    setEditing(ex);
+    setEdit(ex);
     setOpen(true);
   };
 
@@ -58,13 +61,18 @@ const CategoryDetails: React.FC<Props> = ({
       category: editing.category,
       date: iso(editing.date),
     });
-    onExpenseUpdated({ ...updated, date: new Date(updated.date) });
+    /* ░░  local-midnight parse so the UI shows correct day instantly ░░ */
+    onExpenseUpdated({
+      ...updated,
+      date: new Date(updated.date + "T00:00:00"),
+    });
     setOpen(false);
     if (updated.category !== category) onBack();
   };
 
   const visible = expenses.filter((e) => e.category === category);
 
+  /* ---------- render ---------- */
   return (
     <>
       {/* header */}
@@ -82,11 +90,16 @@ const CategoryDetails: React.FC<Props> = ({
       {/* list */}
       <div className="space-y-4">
         {visible.map((ex) => (
-          <div key={ex.id} className="border rounded-md p-4 flex items-center gap-4">
+          <div
+            key={ex.id}
+            className="border rounded-md p-4 flex items-center gap-4"
+          >
             <div className="flex-1">
               <p className="font-semibold">${ex.amount.toFixed(2)}</p>
               {ex.description && (
-                <p className="text-muted-foreground text-sm">{ex.description}</p>
+                <p className="text-muted-foreground text-sm">
+                  {ex.description}
+                </p>
               )}
               <p className="text-muted-foreground text-sm">
                 {new Date(ex.date).toLocaleDateString(undefined, {
@@ -96,7 +109,11 @@ const CategoryDetails: React.FC<Props> = ({
                 })}
               </p>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => startEdit(ex)}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => startEdit(ex)}
+            >
               <Pencil className="h-4 w-4" />
             </Button>
             <Button
@@ -128,7 +145,7 @@ const CategoryDetails: React.FC<Props> = ({
                   step="0.01"
                   value={editing.amount}
                   onChange={(e) =>
-                    setEditing({ ...editing, amount: +e.target.value })
+                    setEdit({ ...editing, amount: +e.target.value })
                   }
                 />
               </div>
@@ -139,7 +156,7 @@ const CategoryDetails: React.FC<Props> = ({
                 <Input
                   value={editing.description ?? ""}
                   onChange={(e) =>
-                    setEditing({ ...editing, description: e.target.value })
+                    setEdit({ ...editing, description: e.target.value })
                   }
                 />
               </div>
@@ -149,7 +166,7 @@ const CategoryDetails: React.FC<Props> = ({
                 <Label>Category</Label>
                 <Select
                   value={editing.category}
-                  onValueChange={(v) => setEditing({ ...editing, category: v })}
+                  onValueChange={(v) => setEdit({ ...editing, category: v })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select category" />
@@ -171,7 +188,7 @@ const CategoryDetails: React.FC<Props> = ({
                   type="date"
                   value={iso(editing.date)}
                   onChange={(e) =>
-                    setEditing({
+                    setEdit({
                       ...editing,
                       date: new Date(e.target.value).toISOString(),
                     })
