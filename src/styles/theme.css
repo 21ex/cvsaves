@@ -1,0 +1,134 @@
+/* =========================================================
+   Dark-mode palette & component overrides
+   ---------------------------------------------------------
+   ✎  Change any of the 4 HEX codes below to another shade
+      and everything will re-use them automatically.
+   =======================================================*/
+
+:root {
+    --bg-dark: #161a1f;
+    /* page backdrop                         */
+    --card-dark: #1f242a;
+    /* cards, menus, popovers, select lists  */
+    --muted-dark: #272d34;
+    /* muted elements / inputs               */
+    --border-dark: #2c333b;
+    /* borders in dark mode                  */
+}
+
+/* ==== global containers ================================= */
+
+.dark body,
+.dark .bg-background {
+    background-color: var(--bg-dark) !important;
+}
+
+.dark .bg-card,
+.dark .bg-white,
+.dark .bg-popover {
+    background-color: var(--card-dark) !important;
+}
+
+.dark .bg-muted {
+    background-color: var(--muted-dark) !important;
+}
+
+.dark .border,
+.dark .border-border {
+    border-color: var(--border-dark) !important;
+}
+
+/* optional – brighten secondary text                         */
+.dark .text-muted-foreground {
+    color: #a1a5ad !important;
+}
+
+/* ==== headings inside cards ============================= */
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4,
+.dark h5,
+.dark h6,
+.dark .card-title {
+    color: #f3f4f6 !important;
+}
+
+/* =========================================================
+   ❶  RADIX / shadcn Select dropdowns
+   ---------------------------------------------------------*/
+.dark [data-radix-popper-content-wrapper],
+.dark .select-content,
+.dark .SelectContent,
+/* shadcn fallback */
+.dark .radix-select-content {
+    /* Radix atom – future proof */
+    background-color: var(--card-dark) !important;
+    border-color: var(--border-dark) !important;
+    color: #e5e7eb !important;
+}
+
+/* each <SelectItem> highlight / hover */
+.dark .select-content [data-highlighted] {
+    background-color: var(--muted-dark) !important;
+    color: #f3f4f6 !important;
+}
+
+/* =========================================================
+   ❷  shadcn <Calendar> (react-day-picker) pop-overs
+   ---------------------------------------------------------*/
+.dark .rdp {
+    --rdp-accent-color: #4f83ff;
+    /* selected day ring  */
+    --rdp-background-color: var(--card-dark);
+    --rdp-outline: 2px solid var(--rdp-accent-color);
+    background-color: var(--card-dark);
+    color: #d1d5db;
+    /* base text          */
+    border: 1px solid var(--border-dark);
+}
+
+.dark .rdp-day:hover:not([aria-selected="true"]) {
+    background-color: var(--muted-dark);
+}
+
+/* selected date */
+.dark .rdp-day[aria-selected="true"] {
+    background-color: var(--rdp-accent-color);
+    color: #fff;
+}
+
+/* =========================================================
+   ❸  native <input type="date"> calendar icon
+   ---------------------------------------------------------
+   We invert the built-in icon so it’s visible on dark bg.  */
+
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    opacity: 0.8;
+}
+
+.dark input[type="date"]:hover::-webkit-calendar-picker-indicator {
+    opacity: 1;
+}
+
+/* Firefox */
+@supports (-moz-appearance: none) {
+    .dark input[type="date"]::-moz-calendar-picker-indicator {
+        filter: invert(1);
+    }
+}
+
+/* =========================================================
+   ❹  shadcn Popover / Dialog panels (already covered by
+       .bg-card rule, but these ensure border + colour)
+   ---------------------------------------------------------*/
+.dark .dialog-content,
+.dark .popover-content {
+    background-color: var(--card-dark) !important;
+    border: 1px solid var(--border-dark) !important;
+    color: #e5e7eb !important;
+}
+
+/* =========================================================
+   End of file - enjoy your softer dark mode!               */

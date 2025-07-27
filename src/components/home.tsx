@@ -1,28 +1,15 @@
-/* src/components/home.tsx – 2025-07-16
-   Minimal date-offset fix (see getExpenses use-effect + addExpLocal) */
-
+/* src/components/home.tsx – 2025-07-16 */
 import React, { useEffect, useState } from "react";
-import {
-  MoonIcon,
-  SunIcon,
-  Settings2,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { MoonIcon, SunIcon, Settings2, Plus, Trash2 } from "lucide-react";
 
-/* ── shadcn/ui ─────────────────────────── */
+/* ── shadcn/ui ─────────────────────────────────────── */
 import { Button } from "./ui/button";
 import { Toaster } from "./ui/toaster";
 import { useToast } from "./ui/use-toast";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 
-/* ── dashboard sections ────────────────── */
+/* ── dashboard sections ───────────────────────────── */
 import BudgetSummary from "./Dashboard/BudgetSummary";
 import SpendingChart from "./Dashboard/SpendingChart";
 import ExpenseManager from "./Dashboard/ExpenseManager";
@@ -30,49 +17,39 @@ import MonthSelector from "./Dashboard/MonthSelector";
 import CategoryDetails from "./Dashboard/CategoryDetails";
 import DataManager from "./Dashboard/DataManager";
 
-/* ── data / auth ───────────────────────── */
+/* ── data / auth ───────────────────────────────────── */
 import { useSessionContext } from "@supabase/auth-helpers-react";
 import { supabase } from "@/lib/supabase";
 import {
-  getExpenses,
-  addExpense,
-  deleteExpense,
-  updateExpense,
-  getMonthlyMeta,
-  upsertMonthlyMeta,
-  getUserCategories,
-  insertDefaultCategories,
+  getExpenses, addExpense, deleteExpense, updateExpense,
+  getMonthlyMeta, upsertMonthlyMeta,
+  getUserCategories, insertDefaultCategories,
   updateCategoryColor,
-  addCategory,
-  renameCategory,
-  deleteCategory,
+  addCategory, renameCategory, deleteCategory,
+  bulkRenameExpenses,                         // ← NEW
   UserCategoryRow,
 } from "@/lib/db";
 import { Transaction } from "@/types/supabase";
 
-/* ---------- helpers ---------- */
+/* ── helpers ───────────────────────────────────────── */
 interface Expense extends Transaction { }
-interface SpendingCategory {
-  name: string;
-  amount: number;
-  color: string;
-}
-const rand = () =>
-  "#" + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, "0");
+interface SpendingCategory { name: string; amount: number; color: string }
+const rand = () => "#" + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, "0");
+const iso = (d: Date) => d.toISOString().slice(0, 10);      // yyyy-mm-dd only
 
-/* ───────────────── component ──────────── */
+/* ──────────────────────────────────────────────────── */
 const Home: React.FC = () => {
   const { session } = useSessionContext();
   const { toast } = useToast();
 
-  /* ----- state ----- */
+  /* ---------- state ---------- */
   const [dark, setDark] = useState(false);
   const [meta, setMeta] = useState({ income: 0, budget: 0 });
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [cats, setCats] = useState<UserCategoryRow[]>([]);
 
   const [month, setMonth] = useState(
-    new Date().toLocaleString("default", { month: "long" }),
+    new Date().toLocaleString("default", { month: "long" })
   );
   const [year, setYear] = useState(new Date().getFullYear());
 
@@ -80,16 +57,16 @@ const Home: React.FC = () => {
   const [catDlg, setCatDlg] = useState(false);
 
   const monthKey = `${year}-${String(
-    new Date(Date.parse(`${month} 1, 2000`)).getMonth() + 1,
+    new Date(Date.parse(`${month} 1, 2000`)).getMonth() + 1
   ).padStart(2, "0")}`;
 
-  /* ----- dark-mode ----- */
+  /* ---------- dark-mode pref ---------- */
   useEffect(() => {
-    const s = localStorage.getItem("budget_dark");
-    if (s) {
-      const d = JSON.parse(s);
-      setDark(d);
-      document.documentElement.classList.toggle("dark", d);
+    const stored = localStorage.getItem("budget_dark");
+    if (stored) {
+      const isDark = JSON.parse(stored);
+      setDark(isDark);
+      document.documentElement.classList.toggle("dark", isDark);
     }
   }, []);
   useEffect(() => {
@@ -97,7 +74,7 @@ const Home: React.FC = () => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 
-  /* ----- categories ----- */
+  /* ---------- load categories ---------- */
   useEffect(() => {
     if (!session) return;
     (async () => {
@@ -110,7 +87,7 @@ const Home: React.FC = () => {
     })().catch(console.error);
   }, [session]);
 
-  /* ----- monthly meta ----- */
+  /* ---------- load meta ---------- */
   useEffect(() => {
     if (!session) return;
     (async () => {
@@ -119,61 +96,50 @@ const Home: React.FC = () => {
     })().catch(console.error);
   }, [session, monthKey]);
 
-  /* ----- expenses  (➜ local-midnight parse) ----- */
+  /* ---------- load expenses ---------- */
   useEffect(() => {
     if (!session) return;
     (async () => {
       const data = await getExpenses(session.user.id, monthKey);
-      setExpenses(
-        data.map((e: any) => ({
-          ...e,
-          date: new Date(e.date + "T00:00:00"),
-        })),
-      );
+      setExpenses(data.map((e: any) => ({ ...e, date: new Date(e.date + "T00:00:00") })));
     })().catch(console.error);
   }, [session, monthKey]);
 
-  /* ----- helpers ----- */
+  /* ---------- helpers ---------- */
   const notify = (t: string, d?: string) =>
     toast({ title: t, description: d, variant: d ? "destructive" : "default" });
 
   async function saveMeta(next: { income: number; budget: number }) {
     if (!session) return;
     setMeta(next);
-    try {
-      await upsertMonthlyMeta(session.user.id, monthKey, next);
-    } catch (e: any) {
-      notify("Save failed", e.message);
-    }
+    try { await upsertMonthlyMeta(session.user.id, monthKey, next); }
+    catch (e: any) { notify("Save failed", e.message); }
   }
 
   async function doLogout() {
-    try {
-      await supabase.auth.signOut();
-    } finally {
-      location.reload();
-    }
+    try { await supabase.auth.signOut(); }
+    finally { location.reload(); }
   }
 
-  /* ----- expense CRUD ----- */
+  /* ---------- expense CRUD ---------- */
   function addExpLocal(e: Omit<Expense, "id">) {
     if (!session) return;
-    addExpense(session.user.id, e)
-      .then((row) =>
-        setExpenses((p) => [
-          { ...row, date: new Date(row.date + "T00:00:00") } as Expense,
+    addExpense(session.user.id, { ...e, date: iso(e.date) })
+      .then(row =>
+        setExpenses(p => [
+          { ...row, date: new Date(row.date + "T00:00:00") },
           ...p,
         ]),
       )
-      .catch((err) => notify("Add failed", err.message));
+      .catch(err => notify("Add failed", err.message));
   }
 
   function delExpLocal(id: string) {
-    const bak = expenses.find((x) => x.id === id);
-    setExpenses((p) => p.filter((x) => x.id !== id));
-    deleteExpense(id).catch((err) => {
+    const backup = expenses.find(x => x.id === id);
+    setExpenses(p => p.filter(x => x.id !== id));
+    deleteExpense(id).catch(err => {
       notify("Delete failed", err.message);
-      if (bak) setExpenses((p) => [bak, ...p]);
+      if (backup) setExpenses(p => [backup, ...p]);
     });
   }
 
@@ -182,72 +148,74 @@ const Home: React.FC = () => {
       amount: e.amount,
       description: e.description,
       category: e.category,
-      date: e.date.toISOString(),
+      date: iso(e.date),
     })
-      .then(() => setExpenses((p) => p.map((x) => (x.id === e.id ? e : x))))
-      .catch((err) => notify("Save failed", err.message));
+      .then(() =>
+        setExpenses(p => p.map(x => (x.id === e.id ? e : x)))
+      )
+      .catch(err => notify("Save failed", err.message));
   }
 
-  /* ----- category helpers ----- */
+  /* ---------- category helpers ---------- */
   async function addCat(name: string) {
     if (!session) return;
     try {
-      const r = await addCategory(session.user.id, name, rand());
-      setCats((p) => [...p, r]);
-    } catch (e: any) {
-      notify("Add failed", e.message);
-    }
+      const row = await addCategory(session.user.id, name, rand());
+      setCats(p => [...p, row]);
+    } catch (e: any) { notify("Add failed", e.message); }
   }
-  async function renameCatSafe(id: string, name: string) {
+
+  async function renameCatSafe(id: string, newLabel: string) {
     if (!session) return;
-    if (!name.trim()) return;
+    const src = cats.find(c => c.id === id);
+    if (!src) return;
+    const oldLabel = src.name;
+    const clean = newLabel.trim();
+    if (!clean || clean === oldLabel) return;     // empty or unchanged
+
     try {
-      await renameCategory(id, name.trim());
-      setCats((p) =>
-        p.map((c) => (c.id === id ? { ...c, name: name.trim() } : c)),
-      );
-    } catch (e: any) {
-      notify("Rename failed", e.message);
-    }
+      // 1) rename category record
+      await renameCategory(id, clean);
+      // 2) update all expenses still using old label
+      await bulkRenameExpenses(session.user.id, oldLabel, clean);
+      // 3) patch local state
+      setCats(p => p.map(c => c.id === id ? { ...c, name: clean } : c));
+      setExpenses(p => p.map(e => e.category === oldLabel ? { ...e, category: clean } : e));
+    } catch (e: any) { notify("Rename failed", e.message); }
   }
+
   async function deleteCat(id: string) {
     if (!session) return;
     try {
       await deleteCategory(id);
-      setCats((p) => p.filter((c) => c.id !== id));
-    } catch (e: any) {
-      notify("Delete failed", e.message);
-    }
+      setCats(p => p.filter(c => c.id !== id));
+    } catch (e: any) { notify("Delete failed", e.message); }
   }
 
-  /* ----- derived values ----- */
-  const monthEx = expenses.filter((e) => {
+  /* ---------- derived values ---------- */
+  const monthEx = expenses.filter(e => {
     const d = new Date(e.date);
-    return (
-      d.toLocaleString("default", { month: "long" }) === month &&
-      d.getFullYear() === year
-    );
+    return d.toLocaleString("default", { month: "long" }) === month && d.getFullYear() === year;
   });
-  const sum = monthEx.reduce((s, e) => s + e.amount, 0);
-  const remain = meta.budget - sum;
 
-  const byCat = monthEx.reduce<SpendingCategory[]>((a, e) => {
-    const row = a.find((x) => x.name === e.category);
+  const totalSpent = monthEx.reduce((s, e) => s + e.amount, 0);
+  const remaining = meta.budget - totalSpent;
+
+  const byCat: SpendingCategory[] = monthEx.reduce((arr, e) => {
+    const row = arr.find(x => x.name === e.category);
     if (row) row.amount += e.amount;
-    else
-      a.push({
-        name: e.category,
-        amount: e.amount,
-        color: cats.find((c) => c.name === e.category)?.color || "#ccc",
-      });
-    return a;
-  }, []);
+    else {
+      const color = cats.find(c => c.name === e.category)?.color || "#ccc";
+      arr.push({ name: e.category, amount: e.amount, color });
+    }
+    return arr;
+  }, [] as SpendingCategory[]);
 
   /* ---------- UI ---------- */
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
-        {/* header */}
+        {/* ── header ── */}
         <header className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold">CVSaves</h1>
           <div className="flex gap-2">
@@ -257,41 +225,36 @@ const Home: React.FC = () => {
             <Button variant="outline" size="icon" onClick={() => setDark(!dark)}>
               {dark ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
             </Button>
-            <Button variant="secondary" onClick={doLogout}>
-              Log out
-            </Button>
+            <Button variant="secondary" onClick={doLogout}>Log out</Button>
           </div>
         </header>
 
-        {/* month selector */}
+        {/* ── month selector ── */}
         <MonthSelector
           selectedMonth={month}
           selectedYear={year}
-          onMonthChange={(m, y) => {
-            setMonth(m);
-            setYear(y);
-          }}
+          onMonthChange={(m, y) => { setMonth(m); setYear(y); }}
         />
 
-        {/* summary */}
+        {/* ── summary ── */}
         <div className="my-8">
           <BudgetSummary
             income={meta.income}
             budget={meta.budget}
-            expenses={sum}
-            remaining={remain}
+            expenses={totalSpent}
+            remaining={remaining}
             onIncomeClick={() => { }}
-            onBudgetChange={(v) => saveMeta({ income: meta.income, budget: v })}
-            onIncomeChange={(v) => saveMeta({ income: v, budget: meta.budget })}
+            onBudgetChange={v => saveMeta({ income: meta.income, budget: v })}
+            onIncomeChange={v => saveMeta({ income: v, budget: meta.budget })}
           />
         </div>
 
-        {/* main */}
+        {/* ── main area ── */}
         {selCat ? (
           <CategoryDetails
             category={selCat}
             expenses={monthEx}
-            categories={cats.map((c) => c.name)}
+            categories={cats.map(c => c.name)}
             onBack={() => setSelCat(null)}
             onDeleteExpense={delExpLocal}
             onExpenseUpdated={updExpLocal}
@@ -301,27 +264,24 @@ const Home: React.FC = () => {
             <div className="grid gap-8 lg:grid-cols-2 mb-8">
               <SpendingChart
                 categories={byCat}
-                totalSpending={sum}
+                totalSpending={totalSpent}
                 budget={meta.budget}
                 onCategoryClick={setSelCat}
                 onCategoryColorChange={async (name, color) => {
-                  const row = cats.find((c) => c.name === name);
+                  const row = cats.find(c => c.name === name);
                   if (!row) return;
                   await updateCategoryColor(row.id, color);
-                  setCats((p) =>
-                    p.map((c) => (c.id === row.id ? { ...c, color } : c)),
-                  );
+                  setCats(p => p.map(c => c.id === row.id ? { ...c, color } : c));
                 }}
               />
+
               <ExpenseManager
                 budget={meta.budget}
-                onBudgetChange={(v) =>
-                  saveMeta({ income: meta.income, budget: v })
-                }
+                onBudgetChange={v => saveMeta({ income: meta.income, budget: v })}
                 expenses={monthEx}
                 onAddExpense={addExpLocal}
                 onDeleteExpense={delExpLocal}
-                categories={cats.map((c) => c.name)}
+                categories={cats.map(c => c.name)}
               />
             </div>
 
@@ -329,10 +289,7 @@ const Home: React.FC = () => {
               expenses={expenses}
               monthlyIncome={meta.income}
               monthlyBudget={meta.budget}
-              onClearAllData={() => {
-                setExpenses([]);
-                setMeta({ income: 0, budget: 0 });
-              }}
+              onClearAllData={() => { setExpenses([]); setMeta({ income: 0, budget: 0 }); }}
               onClearExpenses={() => setExpenses([])}
               onExportData={() => notify("Data exported")}
               onImportData={() => { }}
@@ -341,15 +298,13 @@ const Home: React.FC = () => {
         )}
       </div>
 
-      {/* ── Manage categories dialog ── */}
+      {/* ── manage categories dialog ── */}
       <Dialog open={catDlg} onOpenChange={setCatDlg}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Manage categories</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Manage categories</DialogTitle></DialogHeader>
 
           <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
-            {cats.map((c) => (
+            {cats.map(c => (
               <div key={c.id} className="flex items-center gap-2">
                 <button
                   className="w-4 h-4 rounded-full border shrink-0"
@@ -357,25 +312,19 @@ const Home: React.FC = () => {
                   onClick={async () => {
                     const col = rand();
                     await updateCategoryColor(c.id, col);
-                    setCats((p) =>
-                      p.map((x) =>
-                        x.id === c.id ? { ...x, color: col } : x,
-                      ),
-                    );
+                    setCats(p => p.map(x => x.id === c.id ? { ...x, color: col } : x));
                   }}
                 />
-
-                {/* uncontrolled input; save only onBlur & ignore empty */}
+                {/* uncontrolled input; save only onBlur */}
                 <Input
                   defaultValue={c.name}
                   className="h-7"
-                  onBlur={(e) => {
+                  onBlur={e => {
                     const v = e.target.value.trim();
                     if (!v || v === c.name) return;
                     renameCatSafe(c.id, v);
                   }}
                 />
-
                 <Button
                   variant="ghost"
                   size="icon"
@@ -390,11 +339,9 @@ const Home: React.FC = () => {
 
           <form
             className="flex gap-2 pt-4"
-            onSubmit={(e) => {
+            onSubmit={e => {
               e.preventDefault();
-              const v = (
-                e.currentTarget.elements[0] as HTMLInputElement
-              ).value.trim();
+              const v = (e.currentTarget.elements[0] as HTMLInputElement).value.trim();
               if (v) addCat(v);
               e.currentTarget.reset();
             }}

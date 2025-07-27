@@ -1,10 +1,5 @@
 import { supabase } from "./supabase";
 
-/* helper ────────────────────────────────────────────── */
-/** Always store plain `YYYY-MM-DD` regardless of local tz. */
-const toDateString = (d: Date | string) =>
-  typeof d === "string" ? d.slice(0, 10) : d.toISOString().slice(0, 10);
-
 /* ───────── EXPENSES ───────── */
 
 export async function getExpenses(userId: string, monthKey: string) {
@@ -26,17 +21,11 @@ export async function getExpenses(userId: string, monthKey: string) {
 
 export async function addExpense(
   userId: string,
-  expense: Omit<any, "id" | "user_id">
+  expense: Omit<any, "id" | "user_id">,
 ) {
   const { data, error } = await supabase
     .from("expenses")
-    .insert([
-      {
-        ...expense,
-        user_id: userId,
-        date: toDateString(expense.date),   // 👈 fixes off-by-one
-      },
-    ])
+    .insert([{ ...expense, user_id: userId }])
     .select()
     .single();
 
@@ -52,10 +41,7 @@ export async function deleteExpense(id: string) {
 export async function updateExpense(id: string, fields: any) {
   const { data, error } = await supabase
     .from("expenses")
-    .update({
-      ...fields,
-      date: toDateString(fields.date),      // 👈 fixes off-by-one
-    })
+    .update(fields)
     .eq("id", id)
     .select()
     .single();
@@ -74,14 +60,14 @@ export async function getMonthlyMeta(userId: string, month: string) {
     .eq("month", month)
     .single();
 
-  if (error && error.code !== "PGRST116") throw error;
+  if (error && error.code !== "PGRST116") throw error;   // 116 = not-found (ok)
   return data;
 }
 
 export async function upsertMonthlyMeta(
   userId: string,
   month: string,
-  meta: { income: number; budget: number }
+  meta: { income: number; budget: number },
 ) {
   const { error } = await supabase
     .from("monthly_meta")
@@ -136,12 +122,14 @@ export async function updateCategoryColor(id: string, color: string) {
   if (error) throw error;
 }
 
-/* extra helpers (unchanged) ─────────────────────────── */
+/* NEW helpers
+   ─────────── */
 
+/** create and return the inserted category row */
 export async function addCategory(
   userId: string,
   name: string,
-  color: string
+  color: string,
 ): Promise<UserCategoryRow> {
   const { data, error } = await supabase
     .from("user_categories")
@@ -153,6 +141,7 @@ export async function addCategory(
   return data as UserCategoryRow;
 }
 
+/** rename an existing category record */
 export async function renameCategory(id: string, newName: string) {
   const { error } = await supabase
     .from("user_categories")
@@ -161,10 +150,28 @@ export async function renameCategory(id: string, newName: string) {
   if (error) throw error;
 }
 
+/** delete category record */
 export async function deleteCategory(id: string) {
+  const { error } = await supabase.from("user_categories").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/* ───────── KEEP EXPENSES IN SYNC ───────── */
+
+/**
+ * After a category rename we update every expense that
+ * still references the old category label so they stay associated.
+ */
+export async function bulkRenameExpenses(
+  userId: string,
+  oldName: string,
+  newName: string,
+) {
   const { error } = await supabase
-    .from("user_categories")
-    .delete()
-    .eq("id", id);
+    .from("expenses")
+    .update({ category: newName })
+    .eq("user_id", userId)
+    .eq("category", oldName);
+
   if (error) throw error;
 }

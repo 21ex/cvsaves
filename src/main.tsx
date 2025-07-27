@@ -4,6 +4,9 @@ import App from "./App.tsx";
 import "./index.css";
 import { BrowserRouter } from "react-router-dom";
 
+import "./index.css";        // ← your existing global styles
+import "./styles/theme.css"; // ← NEW dark-mode overrides
+
 import { SessionContextProvider } from "@supabase/auth-helpers-react";
 import { supabase } from "@/lib/supabase";        //client helper
 
