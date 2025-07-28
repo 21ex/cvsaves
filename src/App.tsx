@@ -1,45 +1,32 @@
-import { Suspense } from "react";
-import {
-  Routes,
-  Route,
-  Navigate,
-  useRoutes,
-  useLocation,
-} from "react-router-dom";
-import { useSessionContext } from "@supabase/auth-helpers-react";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { SessionContextProvider, useSessionContext } from "@supabase/auth-helpers-react";
+import { supabase } from "@/lib/supabase";
 
-import Home from "./components/home";
-import Login from "./pages/Login";
-import routes from "tempo-routes";
+/* pages / components */
+import Home from "@/components/home";
+import Login from "@/pages/Login";
+import Signup from "@/pages/Signup";
 
-function App() {
-  const { session, isLoading } = useSessionContext();
-  const { pathname } = useLocation();
+/* -------------------------------------------------------------------------- */
 
-  /* 1️⃣  wait for the cookie */
-  if (isLoading) return null;
+const App = () => (
+  /* BrowserRouter is already provided in main.tsx, so only SessionProvider here */
+  <SessionContextProvider supabaseClient={supabase}>
+    <Routes>
+      <Route path="/" element={<Guard><Home /></Guard>} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
 
-  /* 2️⃣  not signed-in → go to /login (unless we’re already there) */
-  if (!session && pathname !== "/login") {
-    return <Navigate to="/login" replace />;
-  }
-
-  /* 3️⃣  signed-in and still on /login → send to dashboard */
-  if (session && pathname === "/login") {
-    return <Navigate to="/" replace />;
-  }
-
-  return (
-    <Suspense fallback={<p>Loading...</p>}>
-      <>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={<Home />} />
-        </Routes>
-        {import.meta.env.VITE_TEMPO === "true" && useRoutes(routes)}
-      </>
-    </Suspense>
-  );
-}
+      {/* fallback → login */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  </SessionContextProvider>
+);
 
 export default App;
+
+/* ---------- tiny auth-guard ---------- */
+const Guard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { session } = useSessionContext();
+  return session ? <>{children}</> : <Navigate to="/login" replace />;
+};
