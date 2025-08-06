@@ -1,87 +1,100 @@
 /* src/pages/Signup.tsx – 2025-07-30
-   • first & last name fields now mandatory
-   • disables button until all fields are filled
-   • passes names into Supabase user_metadata
+   • first / last name required
+   • after sign-up shows toast + inline banner (remains after route change)
 */
 
 import React, { useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 
 const Signup: React.FC = () => {
     const { toast } = useToast();
-    const navigate = useNavigate();
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [firstName, setFirstName] = useState("");
-    const [lastName, setLastName] = useState("");
+    const [first, setFirst] = useState("");
+    const [last, setLast] = useState("");
     const [loading, setLoading] = useState(false);
+    const [sent, setSent] = useState(false);      // banner flag
 
     const disabled =
-        !email.trim() || !password.trim() || !firstName.trim() || !lastName.trim();
+        !email.trim() || !password.trim() || !first.trim() || !last.trim();
 
     const handleSignup = async () => {
-        if (disabled) {
-            toast({ title: "All fields are required" });
-            return;
-        }
+        if (disabled) return;
 
         setLoading(true);
         const { error } = await supabase.auth.signUp({
             email,
             password,
             options: {
-                data: { first_name: firstName.trim(), last_name: lastName.trim() },
+                data: { first_name: first.trim(), last_name: last.trim() },
                 emailRedirectTo: `${location.origin}/login`,
             },
         });
         setLoading(false);
 
         if (error) {
-            toast({ title: "Sign-up failed", description: error.message, variant: "destructive" });
+            toast({
+                title: "Sign-up failed",
+                description: error.message,
+                variant: "destructive",
+            });
         } else {
             toast({
                 title: "Check your e-mail",
-                description:
-                    "We sent a verification link. Please confirm your address before logging in.",
+                description: "We sent a verification link – confirm your address to finish.",
             });
-            navigate("/login", { replace: true });
+            setSent(true);
         }
     };
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-background px-4">
             <div className="w-full max-w-sm space-y-6">
-                <h1 className="text-2xl font-semibold text-center">Create an account</h1>
+                <h1 className="text-center text-3xl font-bold"> CVSaves • Signup</h1>
+
+                {sent && (
+                    <div className="rounded-md bg-green-100 dark:bg-green-900/40 p-3 text-center text-sm text-green-800 dark:text-green-200">
+                        Almost done!&nbsp;Open the verification link we just e-mailed you.
+                    </div>
+                )}
 
                 <div className="space-y-4">
                     <Input
                         placeholder="First name"
-                        value={firstName}
-                        onChange={e => setFirstName(e.target.value)}
+                        value={first}
+                        onChange={e => setFirst(e.target.value)}
+                        disabled={sent}
                     />
                     <Input
                         placeholder="Last name"
-                        value={lastName}
-                        onChange={e => setLastName(e.target.value)}
+                        value={last}
+                        onChange={e => setLast(e.target.value)}
+                        disabled={sent}
                     />
                     <Input
                         type="email"
                         placeholder="Email"
                         value={email}
                         onChange={e => setEmail(e.target.value)}
+                        disabled={sent}
                     />
                     <Input
                         type="password"
                         placeholder="Password"
                         value={password}
                         onChange={e => setPassword(e.target.value)}
+                        disabled={sent}
                     />
-                    <Button className="w-full" disabled={disabled || loading} onClick={handleSignup}>
+                    <Button
+                        className="w-full"
+                        disabled={disabled || loading || sent}
+                        onClick={handleSignup}
+                    >
                         {loading ? "Signing up…" : "Sign Up"}
                     </Button>
                 </div>

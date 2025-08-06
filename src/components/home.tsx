@@ -1,32 +1,25 @@
 /* src/components/home.tsx – 2025-07-30
    • calendar “T12:00:00” fix
-   • category-rename cascades to past expenses
-   • clearer toast after e-mail change (reminds to confirm BOTH addresses)
-   • 🔥 new “Delete account” button with confirmation in profile dialog
+   • category-rename cascades to expenses
+   • profile e-mail change toast
+   • working Delete-Account button
 */
 
 import React, { useEffect, useState } from "react";
 import {
-  MoonIcon,
-  SunIcon,
-  Settings2,
-  Plus,
-  Trash2,
+  MoonIcon, SunIcon, Settings2, Plus, Trash2,
 } from "lucide-react";
 
-/* ─── shadcn/ui ─────────────────────────────── */
+/* ─ shadcn/ui ─ */
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "./ui/dialog";
 import { Toaster } from "./ui/toaster";
 import { useToast } from "./ui/use-toast";
 
-/* ─── dashboard blocks ──────────────────────── */
+/* ─ dashboard ─ */
 import BudgetSummary from "./Dashboard/BudgetSummary";
 import SpendingChart from "./Dashboard/SpendingChart";
 import ExpenseManager from "./Dashboard/ExpenseManager";
@@ -34,38 +27,30 @@ import MonthSelector from "./Dashboard/MonthSelector";
 import CategoryDetails from "./Dashboard/CategoryDetails";
 import DataManager from "./Dashboard/DataManager";
 
-/* ─── data / auth ───────────────────────────── */
+/* ─ data/auth ─ */
 import { useSessionContext } from "@supabase/auth-helpers-react";
 import { supabase } from "@/lib/supabase";
 import {
-  getExpenses,
-  addExpense,
-  deleteExpense,
-  updateExpense,
-  getMonthlyMeta,
-  upsertMonthlyMeta,
-  getUserCategories,
-  insertDefaultCategories,
-  updateCategoryColor,
-  addCategory,
-  renameCategory,
-  deleteCategory,
+  getExpenses, addExpense, deleteExpense, updateExpense,
+  getMonthlyMeta, upsertMonthlyMeta,
+  getUserCategories, insertDefaultCategories,
+  updateCategoryColor, addCategory, renameCategory, deleteCategory,
   UserCategoryRow,
 } from "@/lib/db";
 import { Transaction } from "@/types/supabase";
 
-/* ─── helpers ───────────────────────────────── */
+/* helpers */
 interface Expense extends Transaction { }
 interface SpendingCategory { name: string; amount: number; color: string; }
 const randColor = () =>
   "#" + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, "0");
 
-/* ───────────────────────────────────────────── */
+/* ─ component ─ */
 const Home: React.FC = () => {
   const { session } = useSessionContext();
   const { toast } = useToast();
 
-  /* ---------- state ---------- */
+  /* local state */
   const [dark, setDark] = useState(false);
   const [meta, setMeta] = useState({ income: 0, budget: 0 });
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -80,7 +65,7 @@ const Home: React.FC = () => {
   const [catDlg, setCatDlg] = useState(false);
   const [profDlg, setProfDlg] = useState(false);
 
-  /* profile scratch copies */
+  /* profile scratch */
   const [pfFn, setPfFn] = useState("");
   const [pfLn, setPfLn] = useState("");
   const [pfEm, setPfEm] = useState("");
@@ -89,7 +74,7 @@ const Home: React.FC = () => {
     `${year}-${String(new Date(Date.parse(`${month} 1,2000`)).getMonth() + 1)
       .padStart(2, "0")}`;
 
-  /* ---------- theme persistence ---------- */
+  /* theme persistence */
   useEffect(() => {
     const s = localStorage.getItem("budget_dark");
     if (s) {
@@ -103,7 +88,7 @@ const Home: React.FC = () => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 
-  /* ---------- fetch categories ---------- */
+  /* categories */
   useEffect(() => {
     if (!session) return;
     (async () => {
@@ -116,7 +101,7 @@ const Home: React.FC = () => {
     })().catch(console.error);
   }, [session]);
 
-  /* ---------- fetch monthly meta ---------- */
+  /* monthly meta */
   useEffect(() => {
     if (!session) return;
     (async () => {
@@ -125,7 +110,7 @@ const Home: React.FC = () => {
     })().catch(console.error);
   }, [session, monthKey]);
 
-  /* ---------- fetch expenses ---------- */
+  /* expenses */
   useEffect(() => {
     if (!session) return;
     (async () => {
@@ -136,7 +121,7 @@ const Home: React.FC = () => {
     })().catch(console.error);
   }, [session, monthKey]);
 
-  /* ---------- helpers ---------- */
+  /* helpers */
   const notify = (t: string, d?: string) =>
     toast({ title: t, description: d, variant: d ? "destructive" : "default" });
 
@@ -148,11 +133,11 @@ const Home: React.FC = () => {
   };
 
   const doLogout = async () => {
-    try { await supabase.auth.signOut(); }
-    finally { location.reload(); }
+    await supabase.auth.signOut();
+    location.reload();
   };
 
-  /* ---------- expense CRUD ---------- */
+  /* expense CRUD */
   function addExpLocal(e: Omit<Expense, "id">) {
     if (!session) return;
     addExpense(session.user.id, e)
@@ -171,13 +156,13 @@ const Home: React.FC = () => {
   function updExpLocal(e: Expense) {
     updateExpense(e.id, {
       amount: e.amount, description: e.description,
-      category: e.category, date: e.date.toISOString()
+      category: e.category, date: e.date.toISOString(),
     })
       .then(() => setExpenses(p => p.map(x => x.id === e.id ? e : x)))
       .catch(err => notify("Save failed", err.message));
   }
 
-  /* ---------- category helpers ---------- */
+  /* category helpers */
   async function addCat(name: string) {
     if (!session) return;
     try {
@@ -186,23 +171,30 @@ const Home: React.FC = () => {
     } catch (e: any) { notify("Add failed", e.message); }
   }
 
-  /** rename category & cascade to expenses */
+  /* ❑❑  fixed braces / semicolons  ❑❑ */
   async function renameCatSafe(id: string, newName: string, oldName: string) {
     if (!session || !newName.trim()) return;
     try {
       await renameCategory(id, newName.trim());
 
-      await supabase                 // cascade update in DB
+      await supabase
         .from("expenses")
         .update({ category: newName.trim() })
         .eq("user_id", session.user.id)
         .eq("category", oldName);
 
-      setCats(p => p.map(c => c.id === id ? { ...c, name: newName.trim() } : c));
-      setExpenses(p => p.map(x =>
-        x.category === oldName ? { ...x, category: newName.trim() } : x)
+      setCats(p =>
+        p.map(c => (c.id === id ? { ...c, name: newName.trim() } : c))
       );
-    } catch (e: any) { notify("Rename failed", e.message); }
+
+      setExpenses(p =>
+        p.map(x =>
+          x.category === oldName ? { ...x, category: newName.trim() } : x
+        )
+      );
+    } catch (e: any) {
+      notify("Rename failed", e.message);
+    }
   }
 
   async function deleteCat(id: string) {
@@ -211,7 +203,7 @@ const Home: React.FC = () => {
     catch (e: any) { notify("Delete failed", e.message); }
   }
 
-  /* ---------- derived ---------- */
+  /* derived */
   const monthEx = expenses.filter(e => {
     const d = new Date(e.date);
     return d.toLocaleString("default", { month: "long" }) === month && d.getFullYear() === year;
@@ -229,12 +221,12 @@ const Home: React.FC = () => {
     return a;
   }, []);
 
-  /* ---------- profile save ---------- */
+  /* profile save */
   const saveProfile = async () => {
     if (!session) return;
     try {
       await supabase.auth.updateUser({
-        data: { first_name: pfFn.trim(), last_name: pfLn.trim() }
+        data: { first_name: pfFn.trim(), last_name: pfLn.trim() },
       });
 
       if (pfEm.trim() !== session.user.email) {
@@ -252,12 +244,11 @@ const Home: React.FC = () => {
       } else {
         toast({ title: "Profile updated" });
       }
-
       setProfDlg(false);
     } catch (e: any) { notify("Update failed", e.message); }
   };
 
-  /* ---------- account deletion ---------- */
+  /* delete account */
   const deleteAccount = async () => {
     if (!session) return;
     const ok = window.confirm(
@@ -266,11 +257,9 @@ const Home: React.FC = () => {
     if (!ok) return;
 
     try {
-      /* ◾ You need a Postgres function or edge function to actually
-         remove the auth user.  This front-end calls an RPC named
-         `delete_current_user` that you should create with a service-
-         role key on the backend. */
-      const { error } = await supabase.rpc("delete_current_user");
+      const { error } = await supabase.rpc("delete_current_user", {
+        uid: session.user.id,
+      });
       if (error) throw error;
 
       toast({ title: "Account deleted" });
@@ -281,13 +270,13 @@ const Home: React.FC = () => {
     }
   };
 
-  /* ────────────────────────── render ────────────────────────── */
+  /* ─────────── render ─────────── */
   return (
     <div className="min-h-screen bg-background">
       <Toaster />
 
       <div className="container mx-auto px-4 py-8">
-        {/* ===== header ===== */}
+        {/* header */}
         <header className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold">CVSaves</h1>
 
@@ -325,7 +314,7 @@ const Home: React.FC = () => {
           </div>
         </header>
 
-        {/* ===== summary ===== */}
+        {/* summary */}
         <div className="my-8">
           <BudgetSummary
             income={meta.income}
@@ -338,7 +327,7 @@ const Home: React.FC = () => {
           />
         </div>
 
-        {/* ===== main ===== */}
+        {/* main */}
         {selCat ? (
           <CategoryDetails
             category={selCat}
@@ -386,7 +375,7 @@ const Home: React.FC = () => {
         )}
       </div>
 
-      {/* ===== Category dialog ===== */}
+      {/* Category dialog */}
       <Dialog open={catDlg} onOpenChange={setCatDlg}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Manage categories</DialogTitle></DialogHeader>
@@ -439,7 +428,7 @@ const Home: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* ===== Profile dialog ===== */}
+      {/* Profile dialog */}
       <Dialog open={profDlg} onOpenChange={setProfDlg}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Your profile</DialogTitle></DialogHeader>

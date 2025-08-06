@@ -23,7 +23,7 @@ const Login: React.FC = () => {
   return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="w-full max-w-xs space-y-4">
-        <h1 className="text-center text-3xl font-bold">CVSaves</h1>
+        <h1 className="text-center text-4xl font-bold">CVSaves</h1>
 
         <div>
           <label>Email address</label>
