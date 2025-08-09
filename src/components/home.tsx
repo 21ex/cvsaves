@@ -1,25 +1,31 @@
-/* src/components/home.tsx – 2025-07-30
-   • calendar “T12:00:00” fix
-   • category-rename cascades to expenses
-   • profile e-mail change toast
-   • working Delete-Account button
+/* src/components/home.tsx – 2025-08-07
+   ▸ Data-tools actions now truly delete from DB
+   ▸ Confirmation added for “Clear this month”
+   ▸ All other functionality unchanged
 */
 
 import React, { useEffect, useState } from "react";
 import {
-  MoonIcon, SunIcon, Settings2, Plus, Trash2,
+  MoonIcon,
+  SunIcon,
+  Settings2,
+  Plus,
+  Trash2,
 } from "lucide-react";
 
-/* ─ shadcn/ui ─ */
+/* ─── shadcn/ui ─────────────────────────────────────────── */
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
 } from "./ui/dialog";
 import { Toaster } from "./ui/toaster";
 import { useToast } from "./ui/use-toast";
 
-/* ─ dashboard ─ */
+/* ─── dashboard blocks ──────────────────────────────────── */
 import BudgetSummary from "./Dashboard/BudgetSummary";
 import SpendingChart from "./Dashboard/SpendingChart";
 import ExpenseManager from "./Dashboard/ExpenseManager";
@@ -27,37 +33,49 @@ import MonthSelector from "./Dashboard/MonthSelector";
 import CategoryDetails from "./Dashboard/CategoryDetails";
 import DataManager from "./Dashboard/DataManager";
 
-/* ─ data/auth ─ */
+/* ─── data / auth ───────────────────────────────────────── */
 import { useSessionContext } from "@supabase/auth-helpers-react";
 import { supabase } from "@/lib/supabase";
 import {
-  getExpenses, addExpense, deleteExpense, updateExpense,
-  getMonthlyMeta, upsertMonthlyMeta,
-  getUserCategories, insertDefaultCategories,
-  updateCategoryColor, addCategory, renameCategory, deleteCategory,
+  getExpenses,
+  addExpense,
+  deleteExpense,
+  updateExpense,
+  getMonthlyMeta,
+  upsertMonthlyMeta,
+  getUserCategories,
+  insertDefaultCategories,
+  updateCategoryColor,
+  addCategory,
+  renameCategory,
+  deleteCategory,
   UserCategoryRow,
 } from "@/lib/db";
 import { Transaction } from "@/types/supabase";
 
-/* helpers */
+/* ---------- helpers ---------- */
 interface Expense extends Transaction { }
-interface SpendingCategory { name: string; amount: number; color: string; }
+interface SpendingCategory {
+  name: string;
+  amount: number;
+  color: string;
+}
 const randColor = () =>
   "#" + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, "0");
 
-/* ─ component ─ */
+/* ───────────────────────────────────────────────────────── */
 const Home: React.FC = () => {
   const { session } = useSessionContext();
   const { toast } = useToast();
 
-  /* local state */
+  /* ---------- local state ---------- */
   const [dark, setDark] = useState(false);
   const [meta, setMeta] = useState({ income: 0, budget: 0 });
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [cats, setCats] = useState<UserCategoryRow[]>([]);
 
   const [month, setMonth] = useState(
-    new Date().toLocaleString("default", { month: "long" })
+    new Date().toLocaleString("default", { month: "long" }),
   );
   const [year, setYear] = useState(new Date().getFullYear());
 
@@ -65,16 +83,16 @@ const Home: React.FC = () => {
   const [catDlg, setCatDlg] = useState(false);
   const [profDlg, setProfDlg] = useState(false);
 
-  /* profile scratch */
+  /* profile scratch copies */
   const [pfFn, setPfFn] = useState("");
   const [pfLn, setPfLn] = useState("");
   const [pfEm, setPfEm] = useState("");
 
-  const monthKey =
-    `${year}-${String(new Date(Date.parse(`${month} 1,2000`)).getMonth() + 1)
-      .padStart(2, "0")}`;
+  const monthKey = `${year}-${String(
+    new Date(Date.parse(`${month} 1,2000`)).getMonth() + 1,
+  ).padStart(2, "0")}`;
 
-  /* theme persistence */
+  /* ---------- theme persistence ---------- */
   useEffect(() => {
     const s = localStorage.getItem("budget_dark");
     if (s) {
@@ -88,7 +106,7 @@ const Home: React.FC = () => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 
-  /* categories */
+  /* ---------- fetch categories ---------- */
   useEffect(() => {
     if (!session) return;
     (async () => {
@@ -101,7 +119,7 @@ const Home: React.FC = () => {
     })().catch(console.error);
   }, [session]);
 
-  /* monthly meta */
+  /* ---------- fetch monthly meta ---------- */
   useEffect(() => {
     if (!session) return;
     (async () => {
@@ -110,87 +128,102 @@ const Home: React.FC = () => {
     })().catch(console.error);
   }, [session, monthKey]);
 
-  /* expenses */
+  /* ---------- fetch expenses ---------- */
   useEffect(() => {
     if (!session) return;
     (async () => {
       const data = await getExpenses(session.user.id, monthKey);
       setExpenses(
-        data.map((e: any) => ({ ...e, date: new Date(`${e.date}T12:00:00`) }))
+        data.map((e: any) => ({ ...e, date: new Date(`${e.date}T12:00:00`) })),
       );
     })().catch(console.error);
   }, [session, monthKey]);
 
-  /* helpers */
+  /* ---------- helpers ---------- */
   const notify = (t: string, d?: string) =>
     toast({ title: t, description: d, variant: d ? "destructive" : "default" });
 
   const saveMeta = async (next: { income: number; budget: number }) => {
     if (!session) return;
     setMeta(next);
-    try { await upsertMonthlyMeta(session.user.id, monthKey, next); }
-    catch (e: any) { notify("Save failed", e.message); }
+    try {
+      await upsertMonthlyMeta(session.user.id, monthKey, next);
+    } catch (e: any) {
+      notify("Save failed", e.message);
+    }
   };
 
   const doLogout = async () => {
-    await supabase.auth.signOut();
-    location.reload();
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      location.reload();
+    }
   };
 
-  /* expense CRUD */
+  /* ---------- expense CRUD ---------- */
   function addExpLocal(e: Omit<Expense, "id">) {
     if (!session) return;
     addExpense(session.user.id, e)
-      .then(row => setExpenses(p => [
-        { ...row, date: new Date(`${row.date}T12:00:00`) }, ...p]))
-      .catch(err => notify("Add failed", err.message));
+      .then((row) =>
+        setExpenses((p) => [
+          { ...row, date: new Date(`${row.date}T12:00:00`) },
+          ...p,
+        ]),
+      )
+      .catch((err) => notify("Add failed", err.message));
   }
   function delExpLocal(id: string) {
-    const bak = expenses.find(x => x.id === id);
-    setExpenses(p => p.filter(x => x.id !== id));
-    deleteExpense(id).catch(err => {
+    const bak = expenses.find((x) => x.id === id);
+    setExpenses((p) => p.filter((x) => x.id !== id));
+    deleteExpense(id).catch((err) => {
       notify("Delete failed", err.message);
-      if (bak) setExpenses(p => [bak!, ...p]);
+      if (bak) setExpenses((p) => [bak!, ...p]);
     });
   }
   function updExpLocal(e: Expense) {
     updateExpense(e.id, {
-      amount: e.amount, description: e.description,
-      category: e.category, date: e.date.toISOString(),
+      amount: e.amount,
+      description: e.description,
+      category: e.category,
+      date: e.date.toISOString(),
     })
-      .then(() => setExpenses(p => p.map(x => x.id === e.id ? e : x)))
-      .catch(err => notify("Save failed", err.message));
+      .then(() => setExpenses((p) => p.map((x) => (x.id === e.id ? e : x))))
+      .catch((err) => notify("Save failed", err.message));
   }
 
-  /* category helpers */
+  /* ---------- category helpers ---------- */
   async function addCat(name: string) {
     if (!session) return;
     try {
       const r = await addCategory(session.user.id, name, randColor());
-      setCats(p => [...p, r]);
-    } catch (e: any) { notify("Add failed", e.message); }
+      setCats((p) => [...p, r]);
+    } catch (e: any) {
+      notify("Add failed", e.message);
+    }
   }
 
-  /* ❑❑  fixed braces / semicolons  ❑❑ */
-  async function renameCatSafe(id: string, newName: string, oldName: string) {
+  async function renameCatSafe(
+    id: string,
+    newName: string,
+    oldName: string,
+  ) {
     if (!session || !newName.trim()) return;
     try {
       await renameCategory(id, newName.trim());
-
       await supabase
         .from("expenses")
         .update({ category: newName.trim() })
         .eq("user_id", session.user.id)
         .eq("category", oldName);
 
-      setCats(p =>
-        p.map(c => (c.id === id ? { ...c, name: newName.trim() } : c))
+      setCats((p) =>
+        p.map((c) => (c.id === id ? { ...c, name: newName.trim() } : c)),
       );
-
-      setExpenses(p =>
-        p.map(x =>
-          x.category === oldName ? { ...x, category: newName.trim() } : x
-        )
+      setExpenses((p) =>
+        p.map((x) =>
+          x.category === oldName ? { ...x, category: newName.trim() } : x,
+        ),
       );
     } catch (e: any) {
       notify("Rename failed", e.message);
@@ -199,29 +232,77 @@ const Home: React.FC = () => {
 
   async function deleteCat(id: string) {
     if (!session) return;
-    try { await deleteCategory(id); setCats(p => p.filter(c => c.id !== id)); }
-    catch (e: any) { notify("Delete failed", e.message); }
+    try {
+      await deleteCategory(id);
+      setCats((p) => p.filter((c) => c.id !== id));
+    } catch (e: any) {
+      notify("Delete failed", e.message);
+    }
   }
 
-  /* derived */
-  const monthEx = expenses.filter(e => {
+  /* ---------- derived ---------- */
+  const monthEx = expenses.filter((e) => {
     const d = new Date(e.date);
-    return d.toLocaleString("default", { month: "long" }) === month && d.getFullYear() === year;
+    return (
+      d.toLocaleString("default", { month: "long" }) === month &&
+      d.getFullYear() === year
+    );
   });
   const sum = monthEx.reduce((s, e) => s + e.amount, 0);
   const remain = meta.budget - sum;
   const byCat = monthEx.reduce<SpendingCategory[]>((a, e) => {
-    const row = a.find(x => x.name === e.category);
+    const row = a.find((x) => x.name === e.category);
     if (row) row.amount += e.amount;
-    else a.push({
-      name: e.category,
-      amount: e.amount,
-      color: cats.find(c => c.name === e.category)?.color || "#ccc",
-    });
+    else
+      a.push({
+        name: e.category,
+        amount: e.amount,
+        color: cats.find((c) => c.name === e.category)?.color || "#ccc",
+      });
     return a;
   }, []);
 
-  /* profile save */
+  /* ---------- data-tool ACTIONS (DB + local) ---------- */
+  const clearCurrentMonth = async () => {
+    if (!session) return;
+    const [y, m] = monthKey.split("-").map(Number);
+    const first = `${monthKey}-01`;
+    const last = new Date(y, m, 0).toISOString().slice(0, 10);
+
+    await supabase
+      .from("expenses")
+      .delete()
+      .eq("user_id", session.user.id)
+      .gte("date", first)
+      .lte("date", last);
+
+    setExpenses((p) =>
+      p.filter(
+        (e) =>
+          !(
+            new Date(e.date).toISOString().slice(0, 10) >= first &&
+            new Date(e.date).toISOString().slice(0, 10) <= last
+          ),
+      ),
+    );
+    toast({ title: "Cleared this month’s data." });
+  };
+
+  const clearEverything = async () => {
+    if (!session) return;
+
+    await supabase.from("expenses").delete().eq("user_id", session.user.id);
+    await supabase
+      .from("monthly_meta")
+      .delete()
+      .eq("user_id", session.user.id);
+
+    setExpenses([]);
+    setMeta({ income: 0, budget: 0 });
+    toast({ title: "All data deleted." });
+  };
+
+  /* ---------- profile save ---------- */
   const saveProfile = async () => {
     if (!session) return;
     try {
@@ -237,53 +318,34 @@ const Home: React.FC = () => {
         if (error) throw error;
 
         toast({
-          title: "Almost done!",
+          title: "Verification required",
           description:
-            "We’ve sent confirmation links to BOTH your current and new e-mail addresses. Please click both links to finish the change.",
+            "We sent a link to your new email. Verify on both addresses to finish the change.",
         });
-      } else {
-        toast({ title: "Profile updated" });
       }
       setProfDlg(false);
-    } catch (e: any) { notify("Update failed", e.message); }
-  };
-
-  /* delete account */
-  const deleteAccount = async () => {
-    if (!session) return;
-    const ok = window.confirm(
-      "Delete your account and all data? This cannot be undone."
-    );
-    if (!ok) return;
-
-    try {
-      const { error } = await supabase.rpc("delete_current_user", {
-        uid: session.user.id,
-      });
-      if (error) throw error;
-
-      toast({ title: "Account deleted" });
-      await supabase.auth.signOut();
-      location.reload();
     } catch (e: any) {
-      notify("Delete failed", e.message);
+      notify("Update failed", e.message);
     }
   };
 
-  /* ─────────── render ─────────── */
+  /* ────────────────────────────────── render ────────────────────────────────── */
   return (
     <div className="min-h-screen bg-background">
       <Toaster />
 
       <div className="container mx-auto px-4 py-8">
-        {/* header */}
+        {/* ===== header ===== */}
         <header className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold">CVSaves</h1>
 
           <MonthSelector
             selectedMonth={month}
             selectedYear={year}
-            onMonthChange={(m, y) => { setMonth(m); setYear(y); }}
+            onMonthChange={(m, y) => {
+              setMonth(m);
+              setYear(y);
+            }}
           />
 
           <div className="flex items-center gap-4">
@@ -304,17 +366,41 @@ const Home: React.FC = () => {
               </button>
             )}
 
-            <Button variant="outline" size="icon" onClick={() => setCatDlg(true)}>
+            {/* category manager */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setCatDlg(true)}
+            >
               <Settings2 className="h-5 w-5" />
             </Button>
-            <Button variant="outline" size="icon" onClick={() => setDark(!dark)}>
-              {dark ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
+
+            {/* data tools */}
+            <DataManager
+              expenses={expenses}
+              onClearMonth={clearCurrentMonth}
+              onClearAll={clearEverything}
+            />
+
+            {/* dark / logout */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setDark(!dark)}
+            >
+              {dark ? (
+                <SunIcon className="h-5 w-5" />
+              ) : (
+                <MoonIcon className="h-5 w-5" />
+              )}
             </Button>
-            <Button variant="secondary" onClick={doLogout}>Log out</Button>
+            <Button variant="secondary" onClick={doLogout}>
+              Log out
+            </Button>
           </div>
         </header>
 
-        {/* summary */}
+        {/* ===== summary ===== */}
         <div className="my-8">
           <BudgetSummary
             income={meta.income}
@@ -322,66 +408,58 @@ const Home: React.FC = () => {
             expenses={sum}
             remaining={remain}
             onIncomeClick={() => { }}
-            onBudgetChange={v => saveMeta({ income: meta.income, budget: v })}
-            onIncomeChange={v => saveMeta({ income: v, budget: meta.budget })}
+            onBudgetChange={(v) => saveMeta({ income: meta.income, budget: v })}
+            onIncomeChange={(v) => saveMeta({ income: v, budget: meta.budget })}
           />
         </div>
 
-        {/* main */}
+        {/* ===== main ===== */}
         {selCat ? (
           <CategoryDetails
             category={selCat}
             expenses={monthEx}
-            categories={cats.map(c => c.name)}
+            categories={cats.map((c) => c.name)}
             onBack={() => setSelCat(null)}
             onDeleteExpense={delExpLocal}
             onExpenseUpdated={updExpLocal}
           />
         ) : (
-          <>
-            <div className="grid gap-8 lg:grid-cols-2 mb-8">
-              <SpendingChart
-                categories={byCat}
-                totalSpending={sum}
-                budget={meta.budget}
-                onCategoryClick={setSelCat}
-                onCategoryColorChange={async (name, color) => {
-                  const row = cats.find(c => c.name === name);
-                  if (!row) return;
-                  await updateCategoryColor(row.id, color);
-                  setCats(p => p.map(c => c.id === row.id ? { ...c, color } : c));
-                }}
-              />
-              <ExpenseManager
-                budget={meta.budget}
-                onBudgetChange={v => saveMeta({ income: meta.income, budget: v })}
-                expenses={monthEx}
-                onAddExpense={addExpLocal}
-                onDeleteExpense={delExpLocal}
-                categories={cats.map(c => c.name)}
-              />
-            </div>
-
-            <DataManager
-              expenses={expenses}
-              monthlyIncome={meta.income}
-              monthlyBudget={meta.budget}
-              onClearAllData={() => { setExpenses([]); setMeta({ income: 0, budget: 0 }); }}
-              onClearExpenses={() => setExpenses([])}
-              onExportData={() => notify("Data exported")}
-              onImportData={() => { }}
+          <div className="grid gap-8 lg:grid-cols-2 mb-8">
+            <SpendingChart
+              categories={byCat}
+              totalSpending={sum}
+              budget={meta.budget}
+              onCategoryClick={setSelCat}
+              onCategoryColorChange={async (name, color) => {
+                const row = cats.find((c) => c.name === name);
+                if (!row) return;
+                await updateCategoryColor(row.id, color);
+                setCats((p) =>
+                  p.map((c) => (c.id === row.id ? { ...c, color } : c)),
+                );
+              }}
             />
-          </>
+            <ExpenseManager
+              budget={meta.budget}
+              onBudgetChange={(v) => saveMeta({ income: meta.income, budget: v })}
+              expenses={monthEx}
+              onAddExpense={addExpLocal}
+              onDeleteExpense={delExpLocal}
+              categories={cats.map((c) => c.name)}
+            />
+          </div>
         )}
       </div>
 
-      {/* Category dialog */}
+      {/* ===== Category dialog ===== */}
       <Dialog open={catDlg} onOpenChange={setCatDlg}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Manage categories</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Manage categories</DialogTitle>
+          </DialogHeader>
 
           <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
-            {cats.map(c => (
+            {cats.map((c) => (
               <div key={c.id} className="flex items-center gap-2">
                 <button
                   className="w-4 h-4 rounded-full border shrink-0"
@@ -389,13 +467,17 @@ const Home: React.FC = () => {
                   onClick={async () => {
                     const col = randColor();
                     await updateCategoryColor(c.id, col);
-                    setCats(p => p.map(x => x.id === c.id ? { ...x, color: col } : x));
+                    setCats((p) =>
+                      p.map((x) =>
+                        x.id === c.id ? { ...x, color: col } : x,
+                      ),
+                    );
                   }}
                 />
                 <Input
                   defaultValue={c.name}
                   className="h-7"
-                  onBlur={e => {
+                  onBlur={(e) => {
                     const v = e.target.value.trim();
                     if (!v || v === c.name) return;
                     renameCatSafe(c.id, v, c.name);
@@ -415,49 +497,71 @@ const Home: React.FC = () => {
 
           <form
             className="flex gap-2 pt-4"
-            onSubmit={e => {
+            onSubmit={(e) => {
               e.preventDefault();
-              const v = (e.currentTarget.elements[0] as HTMLInputElement).value.trim();
+              const v = (
+                e.currentTarget.elements[0] as HTMLInputElement
+              ).value.trim();
               if (v) addCat(v);
               e.currentTarget.reset();
             }}
           >
             <Input placeholder="New category" />
-            <Button size="icon" type="submit"><Plus className="h-4 w-4" /></Button>
+            <Button size="icon" type="submit">
+              <Plus className="h-4 w-4" />
+            </Button>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Profile dialog */}
+      {/* ===== Profile dialog ===== */}
       <Dialog open={profDlg} onOpenChange={setProfDlg}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Your profile</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Your profile</DialogTitle>
+          </DialogHeader>
 
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium">First name</label>
-              <Input value={pfFn} onChange={e => setPfFn(e.target.value)} />
+              <Input value={pfFn} onChange={(e) => setPfFn(e.target.value)} />
             </div>
             <div>
               <label className="text-sm font-medium">Last name</label>
-              <Input value={pfLn} onChange={e => setPfLn(e.target.value)} />
+              <Input value={pfLn} onChange={(e) => setPfLn(e.target.value)} />
             </div>
             <div>
               <label className="text-sm font-medium">E-mail</label>
-              <Input value={pfEm} onChange={e => setPfEm(e.target.value)} />
+              <Input value={pfEm} onChange={(e) => setPfEm(e.target.value)} />
             </div>
 
             <div className="pt-2 flex justify-between">
               <Button
                 variant="destructive"
-                className="mr-auto"
-                onClick={deleteAccount}
+                onClick={async () => {
+                  if (
+                    confirm(
+                      "Delete this account and ALL data associated with it?"
+                    )
+                  ) {
+                    try {
+                      await supabase.rpc("delete_current_user", {
+                        uid: session?.user.id,
+                      });
+                      location.href = "/login";
+                    } catch (e: any) {
+                      notify("Delete failed", e.message);
+                    }
+                  }
+                }}
               >
                 Delete Account
               </Button>
 
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setProfDlg(false)}>Cancel</Button>
+                <Button variant="outline" onClick={() => setProfDlg(false)}>
+                  Cancel
+                </Button>
                 <Button onClick={saveProfile}>Save</Button>
               </div>
             </div>

@@ -1,241 +1,152 @@
+/* Dashboard/DataManager.tsx – 2025-08-07
+   Compact data-tools menu (header icon → dialog). Clears month/全部, exports CSV. */
+
 import React, { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Download, Trash2, Database } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  Trash2,
-  Download,
-  Upload,
-  RotateCcw,
-  ChevronDown,
-  ChevronRight,
-} from "lucide-react";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
-interface Expense {
+interface ExpenseRow {
   id: string;
-  amount: number;
+  date: string | Date;
   category: string;
-  date: Date;
+  description: string | null;
+  amount: number;
 }
 
-interface DataManagerProps {
-  expenses?: Expense[];
-  monthlyIncome?: number;
-  monthlyBudget?: number;
-  onClearAllData?: () => void;
-  onClearExpenses?: () => void;
-  onExportData?: () => void;
-  onImportData?: (data: any) => void;
+interface Props {
+  /* all rows (only for CSV) */
+  expenses: ExpenseRow[];
+  /* async helpers provided by Home ----------------------------------- */
+  onClearMonth: () => Promise<void>;
+  onClearAll: () => Promise<void>;
 }
 
-const DataManager: React.FC<DataManagerProps> = ({
-  expenses = [],
-  monthlyIncome = 5000,
-  monthlyBudget = 4000,
-  onClearAllData = () => {},
-  onClearExpenses = () => {},
-  onExportData = () => {},
-  onImportData = () => {},
+/* ---------- component ---------- */
+const DataManager: React.FC<Props> = ({
+  expenses,
+  onClearMonth,
+  onClearAll,
 }) => {
-  const [showClearAllDialog, setShowClearAllDialog] = useState(false);
-  const [showClearExpensesDialog, setShowClearExpensesDialog] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  const handleExportData = () => {
-    const data = {
-      expenses: expenses,
-      monthlyIncome,
-      monthlyBudget,
-      exportDate: new Date().toISOString(),
-    };
+  /* ---- CSV helper ---- */
+  const exportCsv = () => {
+    if (busy) return;
+    setBusy(true);
 
-    const dataStr = JSON.stringify(data, null, 2);
-    const dataBlob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(dataBlob);
+    const rows: (string | number)[][] = [
+      ["Date", "Category", "Description", "Amount"],
+      ...expenses
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(a.date).getTime() - new Date(b.date).getTime(),
+        )
+        .map((e) => [
+          new Date(e.date).toISOString().slice(0, 10),
+          e.category,
+          e.description ?? "",
+          e.amount.toFixed(2),
+        ]),
+    ];
 
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `budget-data-${new Date().toISOString().split("T")[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const csv = rows
+      .map((r) =>
+        r
+          .map((f) => `"${String(f).replace(/"/g, '""')}"`)
+          .join(","),
+      )
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cvsaves-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
     URL.revokeObjectURL(url);
 
-    onExportData();
+    setBusy(false);
+    setOpen(false);
   };
 
-  const handleImportData = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = JSON.parse(e.target?.result as string);
-        onImportData(data);
-      } catch (error) {
-        console.error("Error importing data:", error);
-      }
-    };
-    reader.readAsText(file);
-
-    // Reset the input
-    event.target.value = "";
-  };
-
+  /* ---- render ---- */
   return (
     <>
-      <Card className="w-full bg-background">
-        <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-xl font-medium">
-                  Data Tools
-                </CardTitle>
-                {isOpen ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </div>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Export Data */}
-                <Button
-                  variant="outline"
-                  onClick={handleExportData}
-                  className="flex items-center justify-center space-x-2"
-                >
-                  <Download className="h-4 w-4" />
-                  <span>Export Data</span>
-                </Button>
-
-                {/* Import Data */}
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept=".json"
-                    onChange={handleImportData}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                  <Button
-                    variant="outline"
-                    className="w-full flex items-center justify-center space-x-2"
-                  >
-                    <Upload className="h-4 w-4" />
-                    <span>Import Data</span>
-                  </Button>
-                </div>
-
-                {/* Clear Expenses */}
-                <Button
-                  variant="outline"
-                  onClick={() => setShowClearExpensesDialog(true)}
-                  className="flex items-center justify-center space-x-2"
-                  disabled={expenses.length === 0}
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  <span>Clear Expenses</span>
-                </Button>
-
-                {/* Clear All Data */}
-                <Button
-                  variant="destructive"
-                  onClick={() => setShowClearAllDialog(true)}
-                  className="flex items-center justify-center space-x-2"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span>Clear All Data</span>
-                </Button>
-              </div>
-
-              <div className="mt-4 p-3 bg-muted rounded-md">
-                <p className="text-sm text-muted-foreground">
-                  <strong>Data Summary:</strong> {expenses.length} expenses •
-                  Income: ${monthlyIncome.toFixed(2)} • Budget: $
-                  {monthlyBudget.toFixed(2)}
-                </p>
-              </div>
-            </CardContent>
-          </CollapsibleContent>
-        </Collapsible>
-      </Card>
-
-      {/* Clear All Data Dialog */}
-      <AlertDialog
-        open={showClearAllDialog}
-        onOpenChange={setShowClearAllDialog}
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => setOpen(true)}
+        title="Data tools"
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Clear All Data</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete all your expenses, income, and budget
-              settings. This action cannot be undone. Consider exporting your
-              data first.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                onClearAllData();
-                setShowClearAllDialog(false);
-              }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Clear All Data
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        <Database className="h-5 w-5" />
+      </Button>
 
-      {/* Clear Expenses Dialog */}
-      <AlertDialog
-        open={showClearExpensesDialog}
-        onOpenChange={setShowClearExpensesDialog}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Clear All Expenses</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete all your expense records. Your income
-              and budget settings will be preserved. This action cannot be
-              undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                onClearExpenses();
-                setShowClearExpensesDialog(false);
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Data tools</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <Button onClick={exportCsv} disabled={busy}>
+              <Download className="h-4 w-4 mr-2" />
+              Export&nbsp;CSV
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={async () => {
+                if (
+                  confirm(
+                    "Delete EVERY expense in this month? This cannot be undone.",
+                  )
+                ) {
+                  setBusy(true);
+                  await onClearMonth();
+                  setBusy(false);
+                  setOpen(false);
+                }
               }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={busy}
             >
-              Clear Expenses
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Clear&nbsp;this&nbsp;month
+            </Button>
+
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (
+                  confirm(
+                    "Delete **ALL** data (budgets, expenses, categories) for this account? This cannot be undone.",
+                  )
+                ) {
+                  setBusy(true);
+                  await onClearAll();
+                  setBusy(false);
+                  setOpen(false);
+                }
+              }}
+              disabled={busy}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Clear&nbsp;EVERYTHING
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
