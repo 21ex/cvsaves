@@ -1,7 +1,10 @@
-/* src/components/home.tsx – 2025-08-07
-   ▸ Data-tools actions now truly delete from DB
-   ▸ Confirmation added for “Clear this month”
-   ▸ All other functionality unchanged
+/* src/components/home.tsx – 2025-08-11
+   Full file (no trimming)
+   - Keeps date "T12:00:00" fix
+   - Category rename cascades past expenses
+   - Profile dialog (edit name/email, delete account)
+   - Data tools dialog (export CSV, clear month, clear everything)
+   - Header layout changed to a 3-column grid so MonthSelector is perfectly centered
 */
 
 import React, { useEffect, useState } from "react";
@@ -11,9 +14,10 @@ import {
   Settings2,
   Plus,
   Trash2,
+  Database,
 } from "lucide-react";
 
-/* ─── shadcn/ui ─────────────────────────────────────────── */
+/* shadcn/ui */
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import {
@@ -25,15 +29,14 @@ import {
 import { Toaster } from "./ui/toaster";
 import { useToast } from "./ui/use-toast";
 
-/* ─── dashboard blocks ──────────────────────────────────── */
+/* dashboard */
 import BudgetSummary from "./Dashboard/BudgetSummary";
 import SpendingChart from "./Dashboard/SpendingChart";
 import ExpenseManager from "./Dashboard/ExpenseManager";
 import MonthSelector from "./Dashboard/MonthSelector";
 import CategoryDetails from "./Dashboard/CategoryDetails";
-import DataManager from "./Dashboard/DataManager";
 
-/* ─── data / auth ───────────────────────────────────────── */
+/* data / auth */
 import { useSessionContext } from "@supabase/auth-helpers-react";
 import { supabase } from "@/lib/supabase";
 import {
@@ -53,22 +56,19 @@ import {
 } from "@/lib/db";
 import { Transaction } from "@/types/supabase";
 
-/* ---------- helpers ---------- */
+/* helpers */
 interface Expense extends Transaction { }
-interface SpendingCategory {
-  name: string;
-  amount: number;
-  color: string;
-}
-const randColor = () =>
+interface SpendingCategory { name: string; amount: number; color: string }
+const rand = () =>
   "#" + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, "0");
+const isoYMD = (d: Date) => d.toISOString().slice(0, 10);
 
 /* ───────────────────────────────────────────────────────── */
 const Home: React.FC = () => {
   const { session } = useSessionContext();
   const { toast } = useToast();
 
-  /* ---------- local state ---------- */
+  /* state */
   const [dark, setDark] = useState(false);
   const [meta, setMeta] = useState({ income: 0, budget: 0 });
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -82,17 +82,18 @@ const Home: React.FC = () => {
   const [selCat, setSelCat] = useState<string | null>(null);
   const [catDlg, setCatDlg] = useState(false);
   const [profDlg, setProfDlg] = useState(false);
+  const [toolsDlg, setToolsDlg] = useState(false);
 
-  /* profile scratch copies */
+  /* profile scratch */
   const [pfFn, setPfFn] = useState("");
   const [pfLn, setPfLn] = useState("");
   const [pfEm, setPfEm] = useState("");
 
   const monthKey = `${year}-${String(
-    new Date(Date.parse(`${month} 1,2000`)).getMonth() + 1,
+    new Date(Date.parse(`${month} 1, 2000`)).getMonth() + 1,
   ).padStart(2, "0")}`;
 
-  /* ---------- theme persistence ---------- */
+  /* ---------- dark-mode pref ---------- */
   useEffect(() => {
     const s = localStorage.getItem("budget_dark");
     if (s) {
@@ -106,7 +107,7 @@ const Home: React.FC = () => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 
-  /* ---------- fetch categories ---------- */
+  /* ---------- categories ---------- */
   useEffect(() => {
     if (!session) return;
     (async () => {
@@ -119,7 +120,7 @@ const Home: React.FC = () => {
     })().catch(console.error);
   }, [session]);
 
-  /* ---------- fetch monthly meta ---------- */
+  /* ---------- monthly meta ---------- */
   useEffect(() => {
     if (!session) return;
     (async () => {
@@ -128,13 +129,17 @@ const Home: React.FC = () => {
     })().catch(console.error);
   }, [session, monthKey]);
 
-  /* ---------- fetch expenses ---------- */
+  /* ---------- expenses ---------- */
   useEffect(() => {
     if (!session) return;
     (async () => {
       const data = await getExpenses(session.user.id, monthKey);
+      /*  add “T12:00:00” so UTC↔local offset can’t push date back a day  */
       setExpenses(
-        data.map((e: any) => ({ ...e, date: new Date(`${e.date}T12:00:00`) })),
+        data.map((e: any) => ({
+          ...e,
+          date: new Date(`${e.date}T12:00:00`),
+        })),
       );
     })().catch(console.error);
   }, [session, monthKey]);
@@ -143,25 +148,19 @@ const Home: React.FC = () => {
   const notify = (t: string, d?: string) =>
     toast({ title: t, description: d, variant: d ? "destructive" : "default" });
 
-  const saveMeta = async (next: { income: number; budget: number }) => {
+  async function saveMeta(next: { income: number; budget: number }) {
     if (!session) return;
     setMeta(next);
-    try {
-      await upsertMonthlyMeta(session.user.id, monthKey, next);
-    } catch (e: any) {
-      notify("Save failed", e.message);
-    }
-  };
+    try { await upsertMonthlyMeta(session.user.id, monthKey, next); }
+    catch (e: any) { notify("Save failed", e.message); }
+  }
 
-  const doLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } finally {
-      location.reload();
-    }
-  };
+  async function doLogout() {
+    try { await supabase.auth.signOut(); }
+    finally { location.reload(); }
+  }
 
-  /* ---------- expense CRUD ---------- */
+  /* expense CRUD */
   function addExpLocal(e: Omit<Expense, "id">) {
     if (!session) return;
     addExpense(session.user.id, e)
@@ -192,55 +191,42 @@ const Home: React.FC = () => {
       .catch((err) => notify("Save failed", err.message));
   }
 
-  /* ---------- category helpers ---------- */
+  /* category helpers */
   async function addCat(name: string) {
     if (!session) return;
     try {
-      const r = await addCategory(session.user.id, name, randColor());
+      const r = await addCategory(session.user.id, name, rand());
       setCats((p) => [...p, r]);
-    } catch (e: any) {
-      notify("Add failed", e.message);
-    }
+    } catch (e: any) { notify("Add failed", e.message); }
   }
 
-  async function renameCatSafe(
-    id: string,
-    newName: string,
-    oldName: string,
-  ) {
+  /** rename category & cascade to expenses  */
+  async function renameCatSafe(id: string, newName: string, oldName: string) {
     if (!session || !newName.trim()) return;
     try {
       await renameCategory(id, newName.trim());
+
+      // cascade past expenses that used the old category name
       await supabase
         .from("expenses")
         .update({ category: newName.trim() })
         .eq("user_id", session.user.id)
         .eq("category", oldName);
 
-      setCats((p) =>
-        p.map((c) => (c.id === id ? { ...c, name: newName.trim() } : c)),
-      );
+      setCats((p) => p.map((c) => (c.id === id ? { ...c, name: newName.trim() } : c)));
       setExpenses((p) =>
-        p.map((x) =>
-          x.category === oldName ? { ...x, category: newName.trim() } : x,
-        ),
+        p.map((x) => (x.category === oldName ? { ...x, category: newName.trim() } : x)),
       );
-    } catch (e: any) {
-      notify("Rename failed", e.message);
-    }
+    } catch (e: any) { notify("Rename failed", e.message); }
   }
 
   async function deleteCat(id: string) {
     if (!session) return;
-    try {
-      await deleteCategory(id);
-      setCats((p) => p.filter((c) => c.id !== id));
-    } catch (e: any) {
-      notify("Delete failed", e.message);
-    }
+    try { await deleteCategory(id); setCats((p) => p.filter((c) => c.id !== id)); }
+    catch (e: any) { notify("Delete failed", e.message); }
   }
 
-  /* ---------- derived ---------- */
+  /* derived */
   const monthEx = expenses.filter((e) => {
     const d = new Date(e.date);
     return (
@@ -262,47 +248,7 @@ const Home: React.FC = () => {
     return a;
   }, []);
 
-  /* ---------- data-tool ACTIONS (DB + local) ---------- */
-  const clearCurrentMonth = async () => {
-    if (!session) return;
-    const [y, m] = monthKey.split("-").map(Number);
-    const first = `${monthKey}-01`;
-    const last = new Date(y, m, 0).toISOString().slice(0, 10);
-
-    await supabase
-      .from("expenses")
-      .delete()
-      .eq("user_id", session.user.id)
-      .gte("date", first)
-      .lte("date", last);
-
-    setExpenses((p) =>
-      p.filter(
-        (e) =>
-          !(
-            new Date(e.date).toISOString().slice(0, 10) >= first &&
-            new Date(e.date).toISOString().slice(0, 10) <= last
-          ),
-      ),
-    );
-    toast({ title: "Cleared this month’s data." });
-  };
-
-  const clearEverything = async () => {
-    if (!session) return;
-
-    await supabase.from("expenses").delete().eq("user_id", session.user.id);
-    await supabase
-      .from("monthly_meta")
-      .delete()
-      .eq("user_id", session.user.id);
-
-    setExpenses([]);
-    setMeta({ income: 0, budget: 0 });
-    toast({ title: "All data deleted." });
-  };
-
-  /* ---------- profile save ---------- */
+  /* ----- profile save / delete ----- */
   const saveProfile = async () => {
     if (!session) return;
     try {
@@ -310,17 +256,16 @@ const Home: React.FC = () => {
         data: { first_name: pfFn.trim(), last_name: pfLn.trim() },
       });
 
-      if (pfEm.trim() !== session.user.email) {
+      if (pfEm.trim() && pfEm.trim() !== session.user.email) {
         const { error } = await supabase.auth.updateUser({
           email: pfEm.trim(),
           emailRedirectTo: `${location.origin}/login`,
         });
         if (error) throw error;
-
         toast({
           title: "Verification required",
           description:
-            "We sent a link to your new email. Verify on both addresses to finish the change.",
+            "We sent verification links to BOTH your old and new e-mails. Complete both to finish the change.",
         });
       }
       setProfDlg(false);
@@ -329,78 +274,173 @@ const Home: React.FC = () => {
     }
   };
 
-  /* ────────────────────────────────── render ────────────────────────────────── */
+  const deleteAccount = async () => {
+    if (!session) return;
+    const ok = window.confirm("Delete your account permanently? This cannot be undone.");
+    if (!ok) return;
+
+    try {
+      // Requires the SQL function `delete_current_user(uid uuid)` created in your DB.
+      const { error } = await supabase.rpc("delete_current_user", {
+        uid: session.user.id,
+      });
+      if (error) throw error;
+
+      toast({ title: "Account deleted" });
+      await supabase.auth.signOut();
+      location.reload();
+    } catch (e: any) {
+      notify("Delete failed", e.message);
+    }
+  };
+
+  /* ----- data tools (export / clear) ----- */
+  const exportCsv = async () => {
+    // export current month for now
+    const rows = monthEx
+      .slice()
+      .sort((a, b) => +new Date(a.date) - +new Date(b.date))
+      .map((e) => ({
+        date: isoYMD(new Date(e.date)),
+        category: e.category,
+        description: e.description ?? "",
+        amount: e.amount.toFixed(2),
+      }));
+
+    const header = ["date", "category", "description", "amount"];
+    const csv =
+      [header.join(","), ...rows.map((r) =>
+        [r.date, csvEscape(r.category), csvEscape(r.description), r.amount].join(","),
+      )].join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `cvsaves_${monthKey}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const csvEscape = (s: string) => {
+    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  };
+
+  const clearMonth = async () => {
+    if (!session) return;
+    const ok = window.confirm(`Clear all expenses for ${month} ${year}?`);
+    if (!ok) return;
+
+    try {
+      const [y, m] = monthKey.split("-").map(Number);
+      const first = `${monthKey}-01`;
+      const last = new Date(y, m, 0).toISOString().slice(0, 10);
+
+      const { error } = await supabase
+        .from("expenses")
+        .delete()
+        .eq("user_id", session.user.id)
+        .gte("date", first)
+        .lte("date", last);
+
+      if (error) throw error;
+
+      setExpenses([]); // current view is that month
+      toast({ title: "Month cleared" });
+    } catch (e: any) {
+      notify("Clear failed", e.message);
+    }
+  };
+
+  const clearEverything = async () => {
+    if (!session) return;
+    const ok = window.confirm("Clear ALL your data (all months)? This cannot be undone.");
+    if (!ok) return;
+    try {
+      // expenses
+      let { error } = await supabase.from("expenses").delete().eq("user_id", session.user.id);
+      if (error) throw error;
+
+      // monthly_meta
+      const { error: e2 } = await supabase
+        .from("monthly_meta")
+        .delete()
+        .eq("user_id", session.user.id);
+      if (e2) throw e2;
+
+      setExpenses([]);
+      setMeta({ income: 0, budget: 0 });
+      toast({ title: "All data cleared" });
+    } catch (e: any) { notify("Clear failed", e.message); }
+  };
+
+  /* ─────────────────── UI ─────────────────── */
   return (
     <div className="min-h-screen bg-background">
       <Toaster />
 
       <div className="container mx-auto px-4 py-8">
-        {/* ===== header ===== */}
-        <header className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">CVSaves</h1>
 
-          <MonthSelector
-            selectedMonth={month}
-            selectedYear={year}
-            onMonthChange={(m, y) => {
-              setMonth(m);
-              setYear(y);
-            }}
-          />
+        {/* header (3-column grid so MonthSelector stays centered) */}
+        <header className="grid grid-cols-[1fr_auto_1fr] items-center mb-8">
+          {/* left: brand */}
+          <div className="justify-self-start">
+            <h1 className="text-3xl font-bold">CVSaves</h1>
+          </div>
 
-          <div className="flex items-center gap-4">
-            {session?.user.user_metadata?.first_name && (
+          {/* center: month selector */}
+          <div className="justify-self-center">
+            <MonthSelector
+              selectedMonth={month}
+              selectedYear={year}
+              onMonthChange={(m, y) => { setMonth(m); setYear(y); }}
+            />
+          </div>
+
+          {/* right: user name + controls */}
+          <div className="justify-self-end flex items-center gap-3">
+            {/* user name (click to open profile) */}
+            {session?.user && (
               <button
                 className="text-sm text-muted-foreground hover:underline"
                 onClick={() => {
-                  setPfFn(session.user.user_metadata.first_name || "");
-                  setPfLn(session.user.user_metadata.last_name || "");
+                  setPfFn((session.user.user_metadata?.first_name as string) || "");
+                  setPfLn((session.user.user_metadata?.last_name as string) || "");
                   setPfEm(session.user.email || "");
                   setProfDlg(true);
                 }}
               >
-                {session.user.user_metadata.first_name}&nbsp;
-                {session.user.user_metadata.last_name
-                  ? (session.user.user_metadata.last_name as string)[0] + "."
-                  : ""}
+                {session.user.user_metadata?.first_name
+                  ? `${session.user.user_metadata.first_name} ${session.user.user_metadata.last_name
+                    ? (session.user.user_metadata.last_name as string)[0] + "."
+                    : ""
+                  }`
+                  : session.user.email}
               </button>
             )}
 
-            {/* category manager */}
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setCatDlg(true)}
-            >
+            {/* categories dialog */}
+            <Button variant="outline" size="icon" onClick={() => setCatDlg(true)}>
               <Settings2 className="h-5 w-5" />
             </Button>
 
             {/* data tools */}
-            <DataManager
-              expenses={expenses}
-              onClearMonth={clearCurrentMonth}
-              onClearAll={clearEverything}
-            />
+            <Button variant="outline" size="icon" onClick={() => setToolsDlg(true)}>
+              <Database className="h-5 w-5" />
+            </Button>
 
-            {/* dark / logout */}
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setDark(!dark)}
-            >
-              {dark ? (
-                <SunIcon className="h-5 w-5" />
-              ) : (
-                <MoonIcon className="h-5 w-5" />
-              )}
+            {/* dark toggle */}
+            <Button variant="outline" size="icon" onClick={() => setDark(!dark)}>
+              {dark ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
             </Button>
-            <Button variant="secondary" onClick={doLogout}>
-              Log out
-            </Button>
+
+            <Button variant="secondary" onClick={doLogout}>Log out</Button>
           </div>
         </header>
 
-        {/* ===== summary ===== */}
+        {/* summary */}
         <div className="my-8">
           <BudgetSummary
             income={meta.income}
@@ -413,7 +453,7 @@ const Home: React.FC = () => {
           />
         </div>
 
-        {/* ===== main ===== */}
+        {/* main */}
         {selCat ? (
           <CategoryDetails
             category={selCat}
@@ -424,39 +464,54 @@ const Home: React.FC = () => {
             onExpenseUpdated={updExpLocal}
           />
         ) : (
-          <div className="grid gap-8 lg:grid-cols-2 mb-8">
-            <SpendingChart
-              categories={byCat}
-              totalSpending={sum}
-              budget={meta.budget}
-              onCategoryClick={setSelCat}
-              onCategoryColorChange={async (name, color) => {
-                const row = cats.find((c) => c.name === name);
-                if (!row) return;
-                await updateCategoryColor(row.id, color);
-                setCats((p) =>
-                  p.map((c) => (c.id === row.id ? { ...c, color } : c)),
-                );
-              }}
-            />
-            <ExpenseManager
-              budget={meta.budget}
-              onBudgetChange={(v) => saveMeta({ income: meta.income, budget: v })}
-              expenses={monthEx}
-              onAddExpense={addExpLocal}
-              onDeleteExpense={delExpLocal}
-              categories={cats.map((c) => c.name)}
-            />
-          </div>
+          <>
+            <div className="grid gap-8 lg:grid-cols-2 mb-8">
+              <SpendingChart
+                categories={byCat}
+                totalSpending={sum}
+                budget={meta.budget}
+                onCategoryClick={setSelCat}
+                onCategoryColorChange={async (name, color) => {
+                  const row = cats.find((c) => c.name === name);
+                  if (!row) return;
+                  await updateCategoryColor(row.id, color);
+                  setCats((p) => p.map((c) => (c.id === row.id ? { ...c, color } : c)));
+                }}
+              />
+              <ExpenseManager
+                budget={meta.budget}
+                onBudgetChange={(v) => saveMeta({ income: meta.income, budget: v })}
+                expenses={monthEx}
+                onAddExpense={addExpLocal}
+                onDeleteExpense={delExpLocal}
+                categories={cats.map((c) => c.name)}
+              />
+            </div>
+          </>
         )}
       </div>
 
-      {/* ===== Category dialog ===== */}
+      {/* footer */}
+      <footer className="border-t mt-10">
+        <div className="container mx-auto px-4 py-8 text-sm text-muted-foreground grid gap-2 text-center">
+          <div>
+            <span className="font-semibold text-foreground">CVSaves</span> by{" "}
+            <span className="font-medium">CVSolutions</span>
+          </div>
+          <div className="flex items-center justify-center gap-6">
+            <a className="hover:underline" href="#" onClick={(e) => e.preventDefault()}>Terms &amp; Conditions</a>
+            <a className="hover:underline" href="#" onClick={(e) => e.preventDefault()}>Privacy Policy</a>
+          </div>
+          <div>
+            <a className="hover:underline" href="#" onClick={(e) => e.preventDefault()}>Support Me</a>
+          </div>
+        </div>
+      </footer>
+
+      {/* ░░ Category dialog ░░ */}
       <Dialog open={catDlg} onOpenChange={setCatDlg}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Manage categories</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Manage categories</DialogTitle></DialogHeader>
 
           <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
             {cats.map((c) => (
@@ -465,15 +520,14 @@ const Home: React.FC = () => {
                   className="w-4 h-4 rounded-full border shrink-0"
                   style={{ backgroundColor: c.color }}
                   onClick={async () => {
-                    const col = randColor();
+                    const col = rand();
                     await updateCategoryColor(c.id, col);
                     setCats((p) =>
-                      p.map((x) =>
-                        x.id === c.id ? { ...x, color: col } : x,
-                      ),
+                      p.map((x) => (x.id === c.id ? { ...x, color: col } : x)),
                     );
                   }}
                 />
+                {/* uncontrolled input; save onBlur */}
                 <Input
                   defaultValue={c.name}
                   className="h-7"
@@ -514,12 +568,10 @@ const Home: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* ===== Profile dialog ===== */}
+      {/* ░░ Profile dialog ░░ */}
       <Dialog open={profDlg} onOpenChange={setProfDlg}>
         <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Your profile</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Your profile</DialogTitle></DialogHeader>
 
           <div className="space-y-4">
             <div>
@@ -535,25 +587,10 @@ const Home: React.FC = () => {
               <Input value={pfEm} onChange={(e) => setPfEm(e.target.value)} />
             </div>
 
-            <div className="pt-2 flex justify-between">
+            <div className="pt-2 flex items-center justify-between">
               <Button
                 variant="destructive"
-                onClick={async () => {
-                  if (
-                    confirm(
-                      "Delete this account and ALL data associated with it?"
-                    )
-                  ) {
-                    try {
-                      await supabase.rpc("delete_current_user", {
-                        uid: session?.user.id,
-                      });
-                      location.href = "/login";
-                    } catch (e: any) {
-                      notify("Delete failed", e.message);
-                    }
-                  }
-                }}
+                onClick={deleteAccount}
               >
                 Delete Account
               </Button>
@@ -565,6 +602,25 @@ const Home: React.FC = () => {
                 <Button onClick={saveProfile}>Save</Button>
               </div>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ░░ Data tools dialog ░░ */}
+      <Dialog open={toolsDlg} onOpenChange={setToolsDlg}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Data tools</DialogTitle></DialogHeader>
+
+          <div className="space-y-3">
+            <Button onClick={exportCsv} className="w-full">
+              Export current month to CSV
+            </Button>
+            <Button variant="outline" onClick={clearMonth} className="w-full">
+              Clear current month
+            </Button>
+            <Button variant="destructive" onClick={clearEverything} className="w-full">
+              Clear everything
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
