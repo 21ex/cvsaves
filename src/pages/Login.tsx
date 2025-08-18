@@ -31,9 +31,9 @@ const Login: React.FC = () => {
       <div className="w-full max-w-xs space-y-4">
         {/* BIG logo, but pull content upward so the overall layout feels like the default */}
         <img
-          src="/brand/CVSavesLongBlack.svg"
+          src="/brand/CVSavesLongText.svg"
           alt="CVSaves by CVSolutions"
-          className="mx-auto h-[294px] w-auto object-contain -mb-8 sm:-mb-10"
+          className="mx-auto h-[320px] w-auto object-contain -mb-8 sm:-mb-10"
         />
 
         <div>

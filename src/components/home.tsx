@@ -25,6 +25,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "./ui/dialog";
 import { Toaster } from "./ui/toaster";
 import { useToast } from "./ui/use-toast";
@@ -57,8 +58,12 @@ import {
 import { Transaction } from "@/types/supabase";
 
 /* helpers */
-interface Expense extends Transaction { }
-interface SpendingCategory { name: string; amount: number; color: string }
+interface Expense extends Transaction {}
+interface SpendingCategory {
+  name: string;
+  amount: number;
+  color: string;
+}
 const rand = () =>
   "#" + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, "0");
 const isoYMD = (d: Date) => d.toISOString().slice(0, 10);
@@ -83,6 +88,10 @@ const Home: React.FC = () => {
   const [catDlg, setCatDlg] = useState(false);
   const [profDlg, setProfDlg] = useState(false);
   const [toolsDlg, setToolsDlg] = useState(false);
+
+  /* footer popups */
+  const [termsDlg, setTermsDlg] = useState(false);
+  const [privacyDlg, setPrivacyDlg] = useState(false);
 
   /* profile scratch */
   const [pfFn, setPfFn] = useState("");
@@ -151,13 +160,19 @@ const Home: React.FC = () => {
   async function saveMeta(next: { income: number; budget: number }) {
     if (!session) return;
     setMeta(next);
-    try { await upsertMonthlyMeta(session.user.id, monthKey, next); }
-    catch (e: any) { notify("Save failed", e.message); }
+    try {
+      await upsertMonthlyMeta(session.user.id, monthKey, next);
+    } catch (e: any) {
+      notify("Save failed", e.message);
+    }
   }
 
   async function doLogout() {
-    try { await supabase.auth.signOut(); }
-    finally { location.reload(); }
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      location.reload();
+    }
   }
 
   /* expense CRUD */
@@ -197,7 +212,9 @@ const Home: React.FC = () => {
     try {
       const r = await addCategory(session.user.id, name, rand());
       setCats((p) => [...p, r]);
-    } catch (e: any) { notify("Add failed", e.message); }
+    } catch (e: any) {
+      notify("Add failed", e.message);
+    }
   }
 
   /** rename category & cascade to expenses  */
@@ -213,17 +230,27 @@ const Home: React.FC = () => {
         .eq("user_id", session.user.id)
         .eq("category", oldName);
 
-      setCats((p) => p.map((c) => (c.id === id ? { ...c, name: newName.trim() } : c)));
-      setExpenses((p) =>
-        p.map((x) => (x.category === oldName ? { ...x, category: newName.trim() } : x)),
+      setCats((p) =>
+        p.map((c) => (c.id === id ? { ...c, name: newName.trim() } : c)),
       );
-    } catch (e: any) { notify("Rename failed", e.message); }
+      setExpenses((p) =>
+        p.map((x) =>
+          x.category === oldName ? { ...x, category: newName.trim() } : x,
+        ),
+      );
+    } catch (e: any) {
+      notify("Rename failed", e.message);
+    }
   }
 
   async function deleteCat(id: string) {
     if (!session) return;
-    try { await deleteCategory(id); setCats((p) => p.filter((c) => c.id !== id)); }
-    catch (e: any) { notify("Delete failed", e.message); }
+    try {
+      await deleteCategory(id);
+      setCats((p) => p.filter((c) => c.id !== id));
+    } catch (e: any) {
+      notify("Delete failed", e.message);
+    }
   }
 
   /* derived */
@@ -276,7 +303,9 @@ const Home: React.FC = () => {
 
   const deleteAccount = async () => {
     if (!session) return;
-    const ok = window.confirm("Delete your account permanently? This cannot be undone.");
+    const ok = window.confirm(
+      "Delete your account permanently? This cannot be undone.",
+    );
     if (!ok) return;
 
     try {
@@ -308,10 +337,14 @@ const Home: React.FC = () => {
       }));
 
     const header = ["date", "category", "description", "amount"];
-    const csv =
-      [header.join(","), ...rows.map((r) =>
-        [r.date, csvEscape(r.category), csvEscape(r.description), r.amount].join(","),
-      )].join("\n");
+    const csv = [
+      header.join(","),
+      ...rows.map((r) =>
+        [r.date, csvEscape(r.category), csvEscape(r.description), r.amount].join(
+          ",",
+        ),
+      ),
+    ].join("\n");
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
@@ -356,11 +389,16 @@ const Home: React.FC = () => {
 
   const clearEverything = async () => {
     if (!session) return;
-    const ok = window.confirm("Clear ALL your data (all months)? This cannot be undone.");
+    const ok = window.confirm(
+      "Clear ALL your data (all months)? This cannot be undone.",
+    );
     if (!ok) return;
     try {
       // expenses
-      let { error } = await supabase.from("expenses").delete().eq("user_id", session.user.id);
+      let { error } = await supabase
+        .from("expenses")
+        .delete()
+        .eq("user_id", session.user.id);
       if (error) throw error;
 
       // monthly_meta
@@ -373,7 +411,9 @@ const Home: React.FC = () => {
       setExpenses([]);
       setMeta({ income: 0, budget: 0 });
       toast({ title: "All data cleared" });
-    } catch (e: any) { notify("Clear failed", e.message); }
+    } catch (e: any) {
+      notify("Clear failed", e.message);
+    }
   };
 
   /* ─────────────────── UI ─────────────────── */
@@ -382,12 +422,22 @@ const Home: React.FC = () => {
       <Toaster />
 
       <div className="container mx-auto px-4 py-8">
-
         {/* header (3-column grid so MonthSelector stays centered) */}
-        <header className="grid grid-cols-[1fr_auto_1fr] items-center mb-8">
+        <header
+          className="grid grid-cols-[1fr_auto_1fr] items-center mb-8 "
+          style={{ height: "76px" }}
+        >
           {/* left: brand */}
-          <div className="justify-self-start">
-            <h1 className="text-3xl font-bold">CVSaves</h1>
+          <div className="flex items-center justify-start" style={{ height: "80px" }}>
+            <h1 className="m-0 text-3xl font-bold flex items-center gap-2 -translate-x-[14px] translate-y-[6px]">
+              <img
+                src={dark ? "/brand/CVSavesWhite.svg" : "/brand/CVSavesBlack.svg"}
+                alt="CVSaves"
+                className="h-[320px] w-auto object-contain scale-[4] origin-left"
+                style={{ transform: "scale(.7)", transformOrigin: "left center" }}
+                loading="eager"
+              />
+            </h1>
           </div>
 
           {/* center: month selector */}
@@ -395,7 +445,10 @@ const Home: React.FC = () => {
             <MonthSelector
               selectedMonth={month}
               selectedYear={year}
-              onMonthChange={(m, y) => { setMonth(m); setYear(y); }}
+              onMonthChange={(m, y) => {
+                setMonth(m);
+                setYear(y);
+              }}
             />
           </div>
 
@@ -413,10 +466,11 @@ const Home: React.FC = () => {
                 }}
               >
                 {session.user.user_metadata?.first_name
-                  ? `${session.user.user_metadata.first_name} ${session.user.user_metadata.last_name
-                    ? (session.user.user_metadata.last_name as string)[0] + "."
-                    : ""
-                  }`
+                  ? `${session.user.user_metadata.first_name} ${
+                      session.user.user_metadata.last_name
+                        ? (session.user.user_metadata.last_name as string)[0] + "."
+                        : ""
+                    }`
                   : session.user.email}
               </button>
             )}
@@ -436,7 +490,9 @@ const Home: React.FC = () => {
               {dark ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
             </Button>
 
-            <Button variant="secondary" onClick={doLogout}>Log out</Button>
+            <Button variant="secondary" onClick={doLogout}>
+              Log out
+            </Button>
           </div>
         </header>
 
@@ -447,7 +503,7 @@ const Home: React.FC = () => {
             budget={meta.budget}
             expenses={sum}
             remaining={remain}
-            onIncomeClick={() => { }}
+            onIncomeClick={() => {}}
             onBudgetChange={(v) => saveMeta({ income: meta.income, budget: v })}
             onIncomeChange={(v) => saveMeta({ income: v, budget: meta.budget })}
           />
@@ -491,27 +547,222 @@ const Home: React.FC = () => {
         )}
       </div>
 
+      {/* centered favicon divider (above footer) — bigger logo without extra whitespace */}
+      <div className="mt-2 mb-4 flex items-center justify-center" style={{ height: "24px" }}>
+        <img
+          src={dark ? "/brand/CVSavesFavWhite.svg" : "/brand/CVSavesFaviconBlack.svg"}
+          alt="CVSaves"
+          className="h-[192px] w-auto select-none pointer-events-none"
+          style={{
+            transform: "scale(1)",
+            transformOrigin: "center",
+            marginTop: "-48px", // keep overlap so whitespace doesn't grow
+          }}
+          loading="lazy"
+        />
+      </div>
+
       {/* footer */}
-      <footer className="border-t mt-10">
+      <footer className="border-t mt-6">
         <div className="container mx-auto px-4 py-8 text-sm text-muted-foreground grid gap-2 text-center">
           <div>
             <span className="font-semibold text-foreground">CVSaves</span> by{" "}
-            <span className="font-medium">CVSolutions</span>
+            <a
+              className="hover:underline font-medium text-foreground"
+              href="https://cvsol.square.site"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              CVSolutions
+            </a>
           </div>
           <div className="flex items-center justify-center gap-6">
-            <a className="hover:underline" href="#" onClick={(e) => e.preventDefault()}>Terms &amp; Conditions</a>
-            <a className="hover:underline" href="#" onClick={(e) => e.preventDefault()}>Privacy Policy</a>
+            <button
+              className="hover:underline"
+              onClick={() => setTermsDlg(true)}
+              type="button"
+            >
+              Terms &amp; Conditions
+            </button>
+            <button
+              className="hover:underline"
+              onClick={() => setPrivacyDlg(true)}
+              type="button"
+            >
+              Privacy Policy
+            </button>
           </div>
           <div>
-            <a className="hover:underline" href="#" onClick={(e) => e.preventDefault()}>Support Me</a>
+            <a className="hover:underline" href="#" onClick={(e) => e.preventDefault()}>
+              Support Me
+            </a>
           </div>
         </div>
       </footer>
 
+      {/* ░░ Terms dialog ░░ */}
+      <Dialog open={termsDlg} onOpenChange={setTermsDlg}>
+        {/* Make the dialog scrollable */}
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto" aria-describedby="terms-desc">
+          <DialogHeader>
+            <DialogTitle>Terms &amp; Conditions – CVSaves</DialogTitle>
+            <p className="text-xs italic text-muted-foreground">Last updated: 17 August 2025</p>
+            <DialogDescription id="terms-desc" asChild>
+              <div className="space-y-4 text-sm leading-6 mt-2">
+                <p>
+                  Welcome to CVSaves. By using our website, you agree to the following terms:
+                </p>
+
+                <h3 className="font-semibold">Purpose of CVSaves</h3>
+                <p>
+                  CVSaves is a free online tool that helps you track your personal expenses and
+                  better understand your finances. It is for informational purposes only and should
+                  not be considered financial advice.
+                </p>
+
+                <h3 className="font-semibold">Account Creation</h3>
+                <ul className="list-disc ml-5 space-y-1">
+                  <li>You may create an account using your email address.</li>
+                  <li>
+                    The name, expense entries, and categories you enter are stored securely in our
+                    database so they are available each time you log in.
+                  </li>
+                </ul>
+
+                <h3 className="font-semibold">Your Responsibilities</h3>
+                <ul className="list-disc ml-5 space-y-1">
+                  <li>You are responsible for the accuracy of the information you enter.</li>
+                  <li>You agree not to use CVSaves for any unlawful purpose.</li>
+                </ul>
+
+                <h3 className="font-semibold">Privacy &amp; Data</h3>
+                <ul className="list-disc ml-5 space-y-1">
+                  <li>
+                    We collect only the information you provide (email, name, and your expense
+                    entries).
+                  </li>
+                  <li>We do not sell your data to third parties.</li>
+                  <li>
+                    While we take reasonable steps to protect your data, we cannot guarantee
+                    complete security.
+                  </li>
+                </ul>
+
+                <h3 className="font-semibold">Links to Other Sites</h3>
+                <p>
+                  CVSaves may contain links to other websites (such as cvsol.square.site). We are
+                  not responsible for the content, security, or privacy practices of those websites.
+                </p>
+
+                <h3 className="font-semibold">Disclaimer of Liability</h3>
+                <p>
+                  CVSaves is provided “as is” without warranties of any kind. We are not responsible
+                  for any loss, damage, or inconvenience caused by the use or inability to use the
+                  website, including any data loss.
+                </p>
+
+                <h3 className="font-semibold">Changes to These Terms</h3>
+                <p>
+                  We may update these terms from time to time. Continued use of CVSaves after
+                  changes are posted means you accept the updated terms.
+                </p>
+
+                <h3 className="font-semibold">Governing Law</h3>
+                <p>These terms are governed by the laws of Canada.</p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end">
+            <Button onClick={() => setTermsDlg(false)}>Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ░░ Privacy dialog ░░ */}
+      <Dialog open={privacyDlg} onOpenChange={setPrivacyDlg}>
+        {/* Make the dialog scrollable */}
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto" aria-describedby="privacy-desc">
+          <DialogHeader>
+            <DialogTitle>Privacy Policy – CVSaves</DialogTitle>
+            <p className="text-xs italic text-muted-foreground">Last updated: 17 August 2025</p>
+            <DialogDescription id="privacy-desc" asChild>
+              <div className="space-y-4 text-sm leading-6 mt-2">
+                <p>
+                  Your privacy is important to us. This Privacy Policy explains what information we
+                  collect, how we use it, and your rights regarding that information.
+                </p>
+
+                <h3 className="font-semibold">1. Information We Collect</h3>
+                <ul className="list-disc ml-5 space-y-1">
+                  <li>
+                    <b>Account Information:</b> Your email address and the name you provide.
+                  </li>
+                  <li>
+                    <b>Expense Data:</b> Any expense entries and categories you create.
+                  </li>
+                  <li>
+                    <b>Technical Data:</b> Basic information about your browser and device
+                    (automatically collected by our hosting services for security and performance).
+                  </li>
+                </ul>
+
+                <h3 className="font-semibold">2. How We Use Your Information</h3>
+                <ul className="list-disc ml-5 space-y-1">
+                  <li>Create and manage your account.</li>
+                  <li>Store and display your expense data each time you log in.</li>
+                  <li>Maintain and improve the functionality of CVSaves.</li>
+                  <li>Respond to support requests (if you contact us).</li>
+                </ul>
+
+                <h3 className="font-semibold">3. How We Store and Protect Your Data</h3>
+                <p>
+                  Your data is stored securely in our database (Supabase). We use reasonable
+                  security measures to protect your information, but no method of storage or
+                  transmission is 100% secure.
+                </p>
+
+                <h3 className="font-semibold">4. Sharing Your Information</h3>
+                <p>
+                  We do not sell, rent, or trade your personal information. We may share your data
+                  only if required by law or to protect our legal rights.
+                </p>
+
+                <h3 className="font-semibold">5. Links to Other Websites</h3>
+                <p>
+                  CVSaves may include links to other websites (such as cvsol.square.site). We are
+                  not responsible for the privacy practices or content of those websites.
+                </p>
+
+                <h3 className="font-semibold">6. Your Rights</h3>
+                <ul className="list-disc ml-5 space-y-1">
+                  <li>View the data we have about you.</li>
+                  <li>Update or correct your information.</li>
+                  <li>Delete your account and associated data.</li>
+                </ul>
+                <p>
+                  To make a request, contact us through: <em>cvsol.square.site</em>
+                </p>
+
+                <h3 className="font-semibold">7. Changes to This Privacy Policy</h3>
+                <p>
+                  We may update this policy from time to time. We will post the updated version here
+                  and change the “Last updated” date.
+                </p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end">
+            <Button onClick={() => setPrivacyDlg(false)}>Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* ░░ Category dialog ░░ */}
       <Dialog open={catDlg} onOpenChange={setCatDlg}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Manage categories</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Manage categories</DialogTitle>
+          </DialogHeader>
 
           <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
             {cats.map((c) => (
@@ -553,9 +804,7 @@ const Home: React.FC = () => {
             className="flex gap-2 pt-4"
             onSubmit={(e) => {
               e.preventDefault();
-              const v = (
-                e.currentTarget.elements[0] as HTMLInputElement
-              ).value.trim();
+              const v = (e.currentTarget.elements[0] as HTMLInputElement).value.trim();
               if (v) addCat(v);
               e.currentTarget.reset();
             }}
@@ -571,7 +820,9 @@ const Home: React.FC = () => {
       {/* ░░ Profile dialog ░░ */}
       <Dialog open={profDlg} onOpenChange={setProfDlg}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Your profile</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Your profile</DialogTitle>
+          </DialogHeader>
 
           <div className="space-y-4">
             <div>
@@ -588,10 +839,7 @@ const Home: React.FC = () => {
             </div>
 
             <div className="pt-2 flex items-center justify-between">
-              <Button
-                variant="destructive"
-                onClick={deleteAccount}
-              >
+              <Button variant="destructive" onClick={deleteAccount}>
                 Delete Account
               </Button>
 
@@ -609,7 +857,9 @@ const Home: React.FC = () => {
       {/* ░░ Data tools dialog ░░ */}
       <Dialog open={toolsDlg} onOpenChange={setToolsDlg}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Data tools</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Data tools</DialogTitle>
+          </DialogHeader>
 
           <div className="space-y-3">
             <Button onClick={exportCsv} className="w-full">
