@@ -5,6 +5,9 @@
    - Profile dialog (edit name/email, delete account)
    - Data tools dialog (export CSV, clear month, clear everything)
    - Header layout changed to a 3-column grid so MonthSelector is perfectly centered
+   - Budget/Tracker pill (minimal change)
+   - Tracker mode: hides BudgetSummary and bases chart % on total spending
+   - Brand image now links to "/"
 */
 
 import React, { useEffect, useState } from "react";
@@ -58,7 +61,7 @@ import {
 import { Transaction } from "@/types/supabase";
 
 /* helpers */
-interface Expense extends Transaction {}
+interface Expense extends Transaction { }
 interface SpendingCategory {
   name: string;
   amount: number;
@@ -97,6 +100,12 @@ const Home: React.FC = () => {
   const [pfFn, setPfFn] = useState("");
   const [pfLn, setPfLn] = useState("");
   const [pfEm, setPfEm] = useState("");
+
+  /* mode (budget vs tracker) */
+  const [mode, setMode] = useState<"budget" | "tracker">(() => {
+    const saved = localStorage.getItem("cvs_mode");
+    return (saved as "budget" | "tracker") || "budget";
+  });
 
   const monthKey = `${year}-${String(
     new Date(Date.parse(`${month} 1, 2000`)).getMonth() + 1,
@@ -262,7 +271,7 @@ const Home: React.FC = () => {
     );
   });
   const sum = monthEx.reduce((s, e) => s + e.amount, 0);
-  const remain = meta.budget - sum;
+  const remain = meta.budget - sum; // allow negative
   const byCat = monthEx.reduce<SpendingCategory[]>((a, e) => {
     const row = a.find((x) => x.name === e.category);
     if (row) row.amount += e.amount;
@@ -323,7 +332,14 @@ const Home: React.FC = () => {
     }
   };
 
-  /* ----- data tools (export / clear) ----- */
+  /* ----- data tools ----- */
+  const csvEscape = (s: string) => {
+    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  };
+
   const exportCsv = async () => {
     // export current month for now
     const rows = monthEx
@@ -352,13 +368,6 @@ const Home: React.FC = () => {
     a.download = `cvsaves_${monthKey}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
-  };
-
-  const csvEscape = (s: string) => {
-    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
-      return `"${s.replace(/"/g, '""')}"`;
-    }
-    return s;
   };
 
   const clearMonth = async () => {
@@ -416,6 +425,11 @@ const Home: React.FC = () => {
     }
   };
 
+  /* persist mode */
+  useEffect(() => {
+    localStorage.setItem("cvs_mode", mode);
+  }, [mode]);
+
   /* ─────────────────── UI ─────────────────── */
   return (
     <div className="min-h-screen bg-background">
@@ -427,16 +441,18 @@ const Home: React.FC = () => {
           className="grid grid-cols-[1fr_auto_1fr] items-center mb-8 "
           style={{ height: "76px" }}
         >
-          {/* left: brand */}
+          {/* left: brand (link to home) */}
           <div className="flex items-center justify-start" style={{ height: "80px" }}>
             <h1 className="m-0 text-3xl font-bold flex items-center gap-2 -translate-x-[14px] translate-y-[6px]">
-              <img
-                src={dark ? "/brand/CVSavesWhite.svg" : "/brand/CVSavesBlack.svg"}
-                alt="CVSaves"
-                className="h-[320px] w-auto object-contain scale-[4] origin-left"
-                style={{ transform: "scale(.7)", transformOrigin: "left center" }}
-                loading="eager"
-              />
+              <a href="/" aria-label="CVSaves Home">
+                <img
+                  src={dark ? "/brand/CVSavesWhite.svg" : "/brand/CVSavesBlack.svg"}
+                  alt="CVSaves"
+                  className="h-[320px] w-auto object-contain scale-[4] origin-left"
+                  style={{ transform: "scale(.7)", transformOrigin: "left center" }}
+                  loading="eager"
+                />
+              </a>
             </h1>
           </div>
 
@@ -454,7 +470,6 @@ const Home: React.FC = () => {
 
           {/* right: user name + controls */}
           <div className="justify-self-end flex items-center gap-3">
-            {/* user name (click to open profile) */}
             {session?.user && (
               <button
                 className="text-sm text-muted-foreground hover:underline"
@@ -466,11 +481,10 @@ const Home: React.FC = () => {
                 }}
               >
                 {session.user.user_metadata?.first_name
-                  ? `${session.user.user_metadata.first_name} ${
-                      session.user.user_metadata.last_name
-                        ? (session.user.user_metadata.last_name as string)[0] + "."
-                        : ""
-                    }`
+                  ? `${session.user.user_metadata.first_name} ${session.user.user_metadata.last_name
+                    ? (session.user.user_metadata.last_name as string)[0] + "."
+                    : ""
+                  }`
                   : session.user.email}
               </button>
             )}
@@ -496,55 +510,83 @@ const Home: React.FC = () => {
           </div>
         </header>
 
-        {/* summary */}
-        <div className="my-8">
-          <BudgetSummary
-            income={meta.income}
-            budget={meta.budget}
-            expenses={sum}
-            remaining={remain}
-            onIncomeClick={() => {}}
-            onBudgetChange={(v) => saveMeta({ income: meta.income, budget: v })}
-            onIncomeChange={(v) => saveMeta({ income: v, budget: meta.budget })}
-          />
-        </div>
-
-        {/* main */}
-        {selCat ? (
-          <CategoryDetails
-            category={selCat}
-            expenses={monthEx}
-            categories={cats.map((c) => c.name)}
-            onBack={() => setSelCat(null)}
-            onDeleteExpense={delExpLocal}
-            onExpenseUpdated={updExpLocal}
-          />
-        ) : (
-          <>
-            <div className="grid gap-8 lg:grid-cols-2 mb-8">
-              <SpendingChart
-                categories={byCat}
-                totalSpending={sum}
-                budget={meta.budget}
-                onCategoryClick={setSelCat}
-                onCategoryColorChange={async (name, color) => {
-                  const row = cats.find((c) => c.name === name);
-                  if (!row) return;
-                  await updateCategoryColor(row.id, color);
-                  setCats((p) => p.map((c) => (c.id === row.id ? { ...c, color } : c)));
-                }}
-              />
-              <ExpenseManager
-                budget={meta.budget}
-                onBudgetChange={(v) => saveMeta({ income: meta.income, budget: v })}
-                expenses={monthEx}
-                onAddExpense={addExpLocal}
-                onDeleteExpense={delExpLocal}
-                categories={cats.map((c) => c.name)}
-              />
-            </div>
-          </>
+        {/* summary — HIDDEN in tracker mode */}
+        {mode === "budget" && (
+          <div className="my-8">
+            <BudgetSummary
+              income={meta.income}
+              budget={meta.budget}
+              expenses={sum}
+              remaining={remain}
+              onIncomeClick={() => { }}
+              onBudgetChange={(v) => saveMeta({ income: meta.income, budget: v })}
+              onIncomeChange={(v) => saveMeta({ income: v, budget: meta.budget })}
+            />
+          </div>
         )}
+
+        {/* main + mode pill (kept minimal) */}
+        <div className="relative">
+          <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-20">
+            <div className="inline-flex items-center rounded-full bg-muted p-1 shadow-sm">
+              <Button
+                size="sm"
+                variant={mode === "budget" ? "default" : "ghost"}
+                className="h-7 px-3 rounded-full"
+                onClick={() => setMode("budget")}
+              >
+                Budget
+              </Button>
+              <Button
+                size="sm"
+                variant={mode === "tracker" ? "default" : "ghost"}
+                className="h-7 px-3 rounded-full"
+                onClick={() => setMode("tracker")}
+              >
+                Tracker
+              </Button>
+            </div>
+          </div>
+
+          {selCat ? (
+            <CategoryDetails
+              category={selCat}
+              expenses={monthEx}
+              categories={cats.map((c) => c.name)}
+              onBack={() => setSelCat(null)}
+              onDeleteExpense={delExpLocal}
+              onExpenseUpdated={updExpLocal}
+            />
+          ) : (
+            <>
+              <div className="grid gap-8 lg:grid-cols-2 mb-8">
+                <SpendingChart
+                  key={`chart-${mode === "tracker" ? "t" : "b"}`} // force clean remount on toggle
+                  categories={byCat}
+                  totalSpending={sum}
+                  budget={meta.budget}                              // <-- stop overriding with sum
+                  trackerMode={mode === "tracker"}                  // <-- pass the mode explicitly
+                  onCategoryClick={setSelCat}
+                  onCategoryColorChange={async (name, color) => {
+                    const row = cats.find((c) => c.name === name);
+                    if (!row) return;
+                    await updateCategoryColor(row.id, color);
+                    setCats((p) => p.map((c) => (c.id === row.id ? { ...c, color } : c)));
+                  }}
+                />
+                <ExpenseManager
+                  /* Keep Expense Manager unchanged — still shows the budget line if in budget mode. */
+                  budget={mode === "tracker" ? 0 : meta.budget}
+                  onBudgetChange={(v) => saveMeta({ income: meta.income, budget: v })}
+                  expenses={monthEx}
+                  onAddExpense={addExpLocal}
+                  onDeleteExpense={delExpLocal}
+                  categories={cats.map((c) => c.name)}
+                />
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* centered favicon divider (above footer) — bigger logo without extra whitespace */}

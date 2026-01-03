@@ -52,7 +52,7 @@ const BudgetSummary = ({
         bgColor: "bg-red-50 dark:bg-red-950",
         iconColor: "text-red-500",
       };
-    } else if (remaining < 0.1 * budget) {
+    } else if (remaining < 0.2 * budget) {
       return {
         textColor: "text-yellow-500",
         bgColor: "bg-yellow-50 dark:bg-yellow-950",
@@ -249,8 +249,9 @@ const BudgetSummary = ({
               <p className="text-sm font-medium text-muted-foreground">
                 Remaining Budget
               </p>
-              <h3 className={`text-2xl font-bold mt-1 ${remainingColor}`}>
-                {formatCurrency(remaining)}
+              {/* Only change: put the color on a child <span> so dark-mode .dark h3 !important doesn’t override */}
+              <h3 className="text-2xl font-bold mt-1">
+                <span className={remainingColor}>{formatCurrency(remaining)}</span>
               </h3>
             </div>
             <div className={`${remainingBgColor} p-3 rounded-full`}>

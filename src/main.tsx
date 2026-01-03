@@ -10,9 +10,6 @@ import "./styles/theme.css"; // ← NEW dark-mode overrides
 import { SessionContextProvider } from "@supabase/auth-helpers-react";
 import { supabase } from "@/lib/supabase";        //client helper
 
-import { TempoDevtools } from "tempo-devtools";
-TempoDevtools.init();
-
 const basename = import.meta.env.BASE_URL;
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

@@ -48,6 +48,8 @@ interface Props {
   categories: SpendingCategory[];
   totalSpending: number;
   budget: number;
+  /** When true, show spending-only (no remaining-slice, % of spending) */
+  trackerMode?: boolean;
   onCategoryClick: (name: string) => void;
   onCategoryColorChange: (name: string, color: string) => void;
 }
@@ -56,29 +58,48 @@ const SpendingChart: React.FC<Props> = ({
   categories,
   totalSpending,
   budget,
+  trackerMode = false,
   onCategoryClick,
   onCategoryColorChange,
 }) => {
   const [showPct, setShowPct] = useState(false);
   const chartRef = useRef<ChartJS>(null);
+
+  // color picker popover state
   const [pickerOpen, setPickerOpen] = useState<string | null>(null);
+  const [tempColor, setTempColor] = useState<string>("");
 
   const safeBudget = budget || 1;
+  const remaining = Math.max(budget - totalSpending, 0);
+  const remainingColor = "#CBD5E1"; // neutral
 
-  /* ----- chart data ----- */
+  // Build dataset depending on mode
+  const labels = trackerMode
+    ? categories.map((c) => c.name)
+    : [...categories.map((c) => c.name), "Remaining"];
+
+  const values = trackerMode
+    ? categories.map((c) => c.amount)
+    : [...categories.map((c) => c.amount), remaining];
+
+  const colors = trackerMode
+    ? categories.map((c) => c.color)
+    : [...categories.map((c) => c.color), remainingColor];
+
   const data = {
-    labels: categories.map((c) => c.name),
+    labels,
     datasets: [
       {
-        data: categories.map((c) => c.amount),
-        backgroundColor: categories.map((c) => c.color),
+        data: values,
+        backgroundColor: colors,
         borderWidth: 0,
       },
     ],
   };
 
+  const denom = trackerMode ? Math.max(totalSpending, 1) : safeBudget;
   const fmt = (v: number) =>
-    showPct ? `${((v / safeBudget) * 100).toFixed(1)} %` : `$${v.toFixed(2)}`;
+    showPct ? `${((v / denom) * 100).toFixed(1)} %` : `$${v.toFixed(2)}`;
 
   /* ----- chart options ----- */
   const options = {
@@ -96,7 +117,11 @@ const SpendingChart: React.FC<Props> = ({
       },
     },
     onClick: (_: any, elems: any[]) => {
-      if (elems.length) onCategoryClick(categories[elems[0].index].name);
+      if (!elems.length) return;
+      const idx = elems[0].index;
+      // In budget mode, ignore clicks on the "Remaining" slice
+      if (!trackerMode && idx >= categories.length) return;
+      onCategoryClick(categories[idx].name);
     },
   };
 
@@ -107,6 +132,20 @@ const SpendingChart: React.FC<Props> = ({
       chart.update();
     }
   };
+
+  /* ---------- center label ----------
+   * % in center ONLY for Budget+%.
+   * Tracker+% shows $ total (same as Tracker+$).
+   */
+  const showPercentInCenter = !trackerMode && showPct;
+
+  const centerTop = showPercentInCenter
+    ? ((totalSpending / Math.max(safeBudget, 1)) * 100)
+        .toFixed(1)
+        .replace(/\.0$/, "")
+    : totalSpending.toFixed(2).replace(/\.00$/, "");
+
+  const centerSub = showPercentInCenter ? "of budget" : "Total";
 
   /* ---------- render ---------- */
   return (
@@ -120,6 +159,7 @@ const SpendingChart: React.FC<Props> = ({
               size="sm"
               className="h-6 px-2"
               onClick={() => setShowPct(false)}
+              aria-label="Show dollars"
             >
               <DollarSign className="h-3 w-3" />
             </Button>
@@ -128,6 +168,7 @@ const SpendingChart: React.FC<Props> = ({
               size="sm"
               className="h-6 px-2"
               onClick={() => setShowPct(true)}
+              aria-label="Show percentages"
             >
               <Percent className="h-3 w-3" />
             </Button>
@@ -147,21 +188,13 @@ const SpendingChart: React.FC<Props> = ({
               {/* ── centre text ── */}
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <span className="text-xl font-semibold">
-                  {showPct
-                    ? `${((totalSpending / safeBudget) * 100)
-                      .toFixed(1)
-                      .replace(/\.0$/, "")} %`
-                    : `$${totalSpending
-                      .toFixed(2)
-                      .replace(/\.00$/, "")}`}
+                  {showPercentInCenter ? `${centerTop} %` : `$${centerTop}`}
                 </span>
-                <span className="text-sm text-muted-foreground">
-                  {showPct ? "of budget" : "Total"}
-                </span>
+                <span className="text-sm text-muted-foreground">{centerSub}</span>
               </div>
             </div>
 
-            {/* legend */}
+            {/* legend (only categories, no 'Remaining') */}
             <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
               {categories.map((cat) => (
                 <div
@@ -180,37 +213,64 @@ const SpendingChart: React.FC<Props> = ({
                   </span>
                   <span className="text-sm font-medium">
                     {showPct
-                      ? `${(
-                        (cat.amount / safeBudget) *
-                        100
-                      ).toFixed(1)} %`
+                      ? `${((cat.amount / denom) * 100).toFixed(1)} %`
                       : `$${cat.amount.toFixed(2)}`}
                   </span>
 
-                  {/* colour picker */}
+                  {/* colour picker with Confirm/Cancel */}
                   <Popover
                     open={pickerOpen === cat.name}
-                    onOpenChange={(o) => setPickerOpen(o ? cat.name : null)}
+                    onOpenChange={(o) => {
+                      if (o) {
+                        setPickerOpen(cat.name);
+                        setTempColor(cat.color); // seed with current color
+                      } else {
+                        setPickerOpen(null);
+                      }
+                    }}
                   >
                     <PopoverTrigger asChild>
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+                        aria-label={`Change ${cat.name} color`}
                       >
                         <Palette className="h-3 w-3" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-2">
-                      <input
-                        type="color"
-                        value={cat.color}
-                        onChange={(e) => {
-                          onCategoryColorChange(cat.name, e.target.value);
-                          setPickerOpen(null);
-                        }}
-                        className="w-20 h-10 border rounded cursor-pointer"
-                      />
+                    <PopoverContent className="w-[220px] p-3">
+                      <div className="flex flex-col gap-3">
+                        <input
+                          type="color"
+                          value={tempColor}
+                          onChange={(e) => setTempColor(e.target.value)}
+                          className="w-full h-10 border rounded cursor-pointer"
+                        />
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setPickerOpen(null); // discard changes
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={async () => {
+                              if (pickerOpen === cat.name) {
+                                await onCategoryColorChange(cat.name, tempColor);
+                              }
+                              setPickerOpen(null);
+                            }}
+                          >
+                            Save
+                          </Button>
+                        </div>
+                      </div>
                     </PopoverContent>
                   </Popover>
                 </div>
