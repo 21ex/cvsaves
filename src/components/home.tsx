@@ -11,6 +11,7 @@
 */
 
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   MoonIcon,
   SunIcon,
@@ -77,7 +78,16 @@ const Home: React.FC = () => {
   const { toast } = useToast();
 
   /* state */
-  const [dark, setDark] = useState(false);
+/* ---------- theme (per user, zero bleed) ---------- */
+  const themeKey = (userId?: string | null) =>
+    userId ? `budget_dark_${userId}` : null;
+
+  const applyTheme = (isDark: boolean) => {
+    document.documentElement.classList.toggle("dark", isDark);
+  };
+
+  // default light; do not reuse prior user’s setting
+  const [dark, setDark] = useState<boolean>(false);
   const [meta, setMeta] = useState({ income: 0, budget: 0 });
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [cats, setCats] = useState<UserCategoryRow[]>([]);
@@ -111,19 +121,39 @@ const Home: React.FC = () => {
     new Date(Date.parse(`${month} 1, 2000`)).getMonth() + 1,
   ).padStart(2, "0")}`;
 
-  /* ---------- dark-mode pref ---------- */
+  // When session changes, load only that user's stored theme; logout resets to light.
   useEffect(() => {
-    const s = localStorage.getItem("budget_dark");
-    if (s) {
-      const d = JSON.parse(s);
-      setDark(d);
-      document.documentElement.classList.toggle("dark", d);
+    const uid = session?.user?.id ?? null;
+    if (uid) {
+      const key = themeKey(uid);
+      try {
+        const saved = key ? localStorage.getItem(key) : null;
+        const next = saved !== null ? !!JSON.parse(saved) : false;
+        setDark(next);
+        applyTheme(next);
+      } catch {
+        setDark(false);
+        applyTheme(false);
+      }
+    } else {
+      setDark(false);
+      applyTheme(false);
     }
-  }, []);
+  }, [session?.user?.id]);
+
+  // Persist per-user only; guests are not persisted. Apply immediately.
   useEffect(() => {
-    localStorage.setItem("budget_dark", JSON.stringify(dark));
-    document.documentElement.classList.toggle("dark", dark);
-  }, [dark]);
+    const uid = session?.user?.id ?? null;
+    const key = themeKey(uid);
+    if (uid && key) {
+      try {
+        localStorage.setItem(key, JSON.stringify(dark));
+      } catch {
+        /* ignore */
+      }
+    }
+    applyTheme(dark);
+  }, [dark, session?.user?.id]);
 
   /* ---------- categories ---------- */
   useEffect(() => {

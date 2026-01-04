@@ -108,7 +108,7 @@ const MonthSelector: React.FC<MonthSelectorProps> = ({
   }, [safeYear]);
 
   return (
-    <div className="flex items-center justify-center space-x-2 bg-background/60 text-foreground">
+    <div className="flex items-center justify-center space-x-2 text-foreground">
       <Button
         variant="ghost"
         size="sm"

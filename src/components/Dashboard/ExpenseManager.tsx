@@ -190,7 +190,7 @@ const ExpenseManager: React.FC<Props> = ({
         </div>
 
         <Button
-          className="w-full"
+          className="w-full bg-primary/90 text-primary-foreground hover:bg-primary shadow-sm dark:bg-primary/80 dark:hover:bg-primary"
           disabled={!amount || !category || !date || +amount <= 0}
           onClick={handleAdd}
         >

@@ -27,7 +27,11 @@ export default App;
 
 /* ---------- tiny auth-guard ---------- */
 const Guard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { session } = useSessionContext();
+  const { session, isLoading } = useSessionContext();
+
+  // Avoid redirecting while Supabase is restoring the session
+  if (isLoading) return null;
+
   return session ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
