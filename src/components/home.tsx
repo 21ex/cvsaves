@@ -40,6 +40,12 @@ import SpendingChart from "./Dashboard/SpendingChart";
 import ExpenseManager from "./Dashboard/ExpenseManager";
 import MonthSelector from "./Dashboard/MonthSelector";
 import CategoryDetails from "./Dashboard/CategoryDetails";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "./ui/accordion";
 
 /* data / auth */
 import { useSessionContext } from "@supabase/auth-helpers-react";
@@ -465,21 +471,20 @@ const Home: React.FC = () => {
     <div className="min-h-screen bg-background">
       <Toaster />
 
-      <div className="container mx-auto px-4 py-8">
-        {/* header (3-column grid so MonthSelector stays centered) */}
+      <div className="container mx-auto px-4 py-4 md:py-8">
+        {/* header: stacks on mobile, 3-column on desktop */}
         <header
-          className="grid grid-cols-[1fr_auto_1fr] items-center mb-8 "
-          style={{ height: "76px" }}
+          className="grid grid-cols-1 gap-1 md:grid-cols-[1fr_auto_1fr] md:gap-0 md:items-center md:mb-8 mb-3"
+          style={{ minHeight: "76px" }}
         >
           {/* left: brand (link to home) */}
-          <div className="flex items-center justify-start" style={{ height: "80px" }}>
-            <h1 className="m-0 text-3xl font-bold flex items-center gap-2 -translate-x-[14px] translate-y-[6px]">
+          <div className="flex items-center justify-center md:justify-start md:h-[80px]">
+            <h1 className="m-0 text-2xl md:text-3xl font-bold flex items-center gap-2 md:-translate-x-[14px] md:translate-y-[6px] text-center md:text-left">
               <a href="/" aria-label="CVSaves Home">
                 <img
                   src={dark ? "/brand/CVSavesWhite.svg" : "/brand/CVSavesBlack.svg"}
                   alt="CVSaves"
-                  className="h-[320px] w-auto object-contain scale-[4] origin-left"
-                  style={{ transform: "scale(.7)", transformOrigin: "left center" }}
+                  className="h-40 w-auto md:h-[320px] scale-150 md:scale-[0.7] md:origin-left"
                   loading="eager"
                 />
               </a>
@@ -499,7 +504,7 @@ const Home: React.FC = () => {
           </div>
 
           {/* right: user name + controls */}
-          <div className="justify-self-end flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 md:gap-3 justify-center md:justify-end">
             {session?.user && (
               <button
                 className="text-sm text-muted-foreground hover:underline"
@@ -520,21 +525,21 @@ const Home: React.FC = () => {
             )}
 
             {/* categories dialog */}
-            <Button variant="outline" size="icon" onClick={() => setCatDlg(true)}>
+            <Button variant="outline" size="icon" className="h-10 w-10 md:h-9 md:w-9" onClick={() => setCatDlg(true)}>
               <Settings2 className="h-5 w-5" />
             </Button>
 
             {/* data tools */}
-            <Button variant="outline" size="icon" onClick={() => setToolsDlg(true)}>
+            <Button variant="outline" size="icon" className="h-10 w-10 md:h-9 md:w-9" onClick={() => setToolsDlg(true)}>
               <Database className="h-5 w-5" />
             </Button>
 
             {/* dark toggle */}
-            <Button variant="outline" size="icon" onClick={() => setDark(!dark)}>
+            <Button variant="outline" size="icon" className="h-10 w-10 md:h-9 md:w-9" onClick={() => setDark(!dark)}>
               {dark ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
             </Button>
 
-            <Button variant="secondary" onClick={doLogout}>
+            <Button variant="secondary" size="sm" className="h-10 md:h-9 px-3" onClick={doLogout}>
               Log out
             </Button>
           </div>
@@ -542,22 +547,58 @@ const Home: React.FC = () => {
 
         {/* summary — HIDDEN in tracker mode */}
         {mode === "budget" && (
-          <div className="my-8">
-            <BudgetSummary
-              income={meta.income}
-              budget={meta.budget}
-              expenses={sum}
-              remaining={remain}
-              onIncomeClick={() => { }}
-              onBudgetChange={(v) => saveMeta({ income: meta.income, budget: v })}
-              onIncomeChange={(v) => saveMeta({ income: v, budget: meta.budget })}
-            />
+          <div className="my-6 md:my-8">
+            {selCat ? (
+              <>
+                <div className="md:hidden">
+                  <Accordion type="single" collapsible defaultValue="summary">
+                    <AccordionItem value="summary">
+                      <AccordionTrigger className="text-base font-semibold">
+                        Budget Summary
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <BudgetSummary
+                          income={meta.income}
+                          budget={meta.budget}
+                          expenses={sum}
+                          remaining={remain}
+                          onIncomeClick={() => { }}
+                          onBudgetChange={(v) => saveMeta({ income: meta.income, budget: v })}
+                          onIncomeChange={(v) => saveMeta({ income: v, budget: meta.budget })}
+                        />
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                </div>
+                <div className="hidden md:block">
+                  <BudgetSummary
+                    income={meta.income}
+                    budget={meta.budget}
+                    expenses={sum}
+                    remaining={remain}
+                    onIncomeClick={() => { }}
+                    onBudgetChange={(v) => saveMeta({ income: meta.income, budget: v })}
+                    onIncomeChange={(v) => saveMeta({ income: v, budget: meta.budget })}
+                  />
+                </div>
+              </>
+            ) : (
+              <BudgetSummary
+                income={meta.income}
+                budget={meta.budget}
+                expenses={sum}
+                remaining={remain}
+                onIncomeClick={() => { }}
+                onBudgetChange={(v) => saveMeta({ income: meta.income, budget: v })}
+                onIncomeChange={(v) => saveMeta({ income: v, budget: meta.budget })}
+              />
+            )}
           </div>
         )}
 
         {/* main + mode pill (kept minimal) */}
-        <div className="relative">
-          <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-20">
+        <div className="relative pt-1 md:pt-0">
+          <div className="md:absolute md:-top-4 left-1/2 md:-translate-x-1/2 z-20 flex justify-center mb-4 md:mb-0">
             <div className="inline-flex items-center rounded-full bg-muted p-1 shadow-sm">
               <Button
                 size="sm"
@@ -619,17 +660,13 @@ const Home: React.FC = () => {
         </div>
       </div>
 
-      {/* centered favicon divider (above footer) — bigger logo without extra whitespace */}
-      <div className="mt-2 mb-4 flex items-center justify-center" style={{ height: "24px" }}>
+      {/* centered favicon divider */}
+      <div className="mt-2 mb-3 md:mb-2 flex items-center justify-center h-12 md:h-6">
         <img
           src={dark ? "/brand/CVSavesFavWhite.svg" : "/brand/CVSavesFaviconBlack.svg"}
           alt="CVSaves"
-          className="h-[192px] w-auto select-none pointer-events-none"
-          style={{
-            transform: "scale(1)",
-            transformOrigin: "center",
-            marginTop: "-48px", // keep overlap so whitespace doesn't grow
-          }}
+          className="h-[192px] md:h-[192px] w-auto select-none pointer-events-none -mt-8 md:-mt-12 -mb-4 md:-mb-6"
+          style={{ transform: "scale(1)", transformOrigin: "center" }}
           loading="lazy"
         />
       </div>
