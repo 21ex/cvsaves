@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
+import { Toaster } from "@/components/ui/toaster";
 
 const ForgotPassword: React.FC = () => {
   const { toast } = useToast();
@@ -28,7 +29,7 @@ const ForgotPassword: React.FC = () => {
       toast({ title: "Reset failed", description: error.message, variant: "destructive" });
     } else {
       toast({
-        title: "Check your email",
+        title: "Reset link sent",
         description: "If that address exists, we sent a password reset link.",
       });
     }
@@ -36,6 +37,7 @@ const ForgotPassword: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
+      <Toaster />
       <div className="w-full max-w-sm space-y-4">
         <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:underline">
           ← Back to home

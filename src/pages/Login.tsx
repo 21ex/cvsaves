@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
+import { Toaster } from "@/components/ui/toaster";
 
 const Login: React.FC = () => {
   const nav = useNavigate();
@@ -17,7 +18,12 @@ const Login: React.FC = () => {
     const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
     setL(false);
     if (error) {
-      toast({ title: "Login failed", description: error.message, variant: "destructive" });
+      const friendly =
+        error.message?.toLowerCase().includes("invalid login credentials") ||
+        error.message?.toLowerCase().includes("invalid email or password")
+          ? "The email or password is incorrect. Please try again."
+          : error.message;
+      toast({ title: "Login failed", description: friendly, variant: "destructive" });
     } else {
       nav("/", { replace: true });
     }
@@ -25,6 +31,7 @@ const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen grid place-items-center">
+      <Toaster />
       <div className="w-full max-w-xs space-y-4">
         {/* BIG logo, but pull content upward so the overall layout feels like the default */}
         <Link to="/">

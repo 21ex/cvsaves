@@ -12,6 +12,7 @@ const ResetPassword: React.FC = () => {
   const [confirm, setConfirm] = useState("");
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<{ text: string; tone: "info" | "success" | "error" } | null>(null);
 
   // Apply session from URL hash (access_token/refresh_token for recovery)
   useEffect(() => {
@@ -22,46 +23,50 @@ const ResetPassword: React.FC = () => {
     const type = params.get("type");
 
     if (access_token && refresh_token && type === "recovery") {
-      supabase.auth
-        .setSession({ access_token, refresh_token })
-        .then(({ error }) => {
-          if (error) throw error;
-          setReady(true);
-        })
-        .catch((err) => {
-          toast({ title: "Invalid reset link", description: err.message, variant: "destructive" });
-        });
+      (async () => {
+        const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+        if (error) {
+          toast({ title: "Invalid reset link", description: error.message, variant: "destructive" });
+          setStatus({ text: "Invalid or expired link. Request a new reset link.", tone: "error" });
+          return;
+        }
+        setReady(true);
+        setStatus({ text: "Link validated. You can set a new password.", tone: "info" });
+      })();
     } else {
       toast({
         title: "Invalid or expired link",
         description: "Request a new password reset link.",
         variant: "destructive",
       });
+      setStatus({ text: "Invalid or expired link. Request a new reset link.", tone: "error" });
     }
   }, [toast]);
 
   const submit = async () => {
-    if (!ready) return;
+    if (!ready) {
+      setStatus({ text: "The reset link is invalid or expired. Request a new one.", tone: "error" });
+      return;
+    }
     if (!newPass || newPass.length < 8) {
-      toast({
-        title: "Password too short",
-        description: "Please use at least 8 characters.",
-        variant: "destructive",
-      });
+      setStatus({ text: "Password must be at least 8 characters.", tone: "error" });
       return;
     }
     if (newPass !== confirm) {
-      toast({ title: "Passwords do not match", variant: "destructive" });
+      setStatus({ text: "Passwords do not match.", tone: "error" });
       return;
     }
 
+    setStatus(null);
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password: newPass });
     setLoading(false);
     if (error) {
       toast({ title: "Reset failed", description: error.message, variant: "destructive" });
+      setStatus({ text: error.message, tone: "error" });
     } else {
       toast({ title: "Password updated", description: "You can now log in with your new password." });
+      setStatus({ text: "Password updated. Redirecting to login…", tone: "success" });
       nav("/login", { replace: true });
     }
   };
@@ -102,9 +107,23 @@ const ResetPassword: React.FC = () => {
           {loading ? "Updating…" : "Update password"}
         </Button>
 
+        {status && (
+          <p
+            className={`text-xs ${
+              status.tone === "error"
+                ? "text-red-500"
+                : status.tone === "success"
+                ? "text-green-500"
+                : "text-muted-foreground"
+            }`}
+          >
+            {status.text}
+          </p>
+        )}
+
         {!ready && (
           <p className="text-xs text-muted-foreground">
-            Waiting for a valid reset link… If you reached this page directly, request a new reset link.
+            Waiting for a valid reset link. If you reached this page directly, request a new reset link.
           </p>
         )}
       </div>
