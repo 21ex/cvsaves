@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import { Eye, EyeOff } from "lucide-react";
 
 /* shadcn/ui dialog for Terms */
 import {
@@ -28,6 +29,9 @@ const Signup: React.FC = () => {
 
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
+  const [pass2, setPass2] = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [showPass2, setShowPass2] = useState(false);
   const [first, setFirst] = useState("");
   const [last, setLast] = useState("");
   const [agree, setAgree] = useState(false);
@@ -37,7 +41,7 @@ const Signup: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const go = async () => {
-    if (!email || !pass || !first || !last) {
+    if (!email || !pass || !pass2 || !first || !last) {
       toast({
         title: "Missing info",
         description: "Please fill in all fields.",
@@ -52,6 +56,15 @@ const Signup: React.FC = () => {
       toast({
         title: "Password too short",
         description: `Please use at least ${MIN_PASS} characters.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (pass !== pass2) {
+      toast({
+        title: "Passwords do not match",
+        description: "Please enter the same password twice.",
         variant: "destructive",
       });
       return;
@@ -93,17 +106,17 @@ const Signup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+    <div className="min-h-screen flex justify-center bg-background px-4 py-10 md:py-12 md:items-center">
       {/* Mount a toaster here so toasts always render on this page */}
       <Toaster />
 
-      <div className="w-full max-w-sm space-y-3">
+      <div className="w-full max-w-sm md:max-w-md space-y-3">
         {/* Logo + title. Pointer-events disabled so it never blocks inputs */}
         <h1 className="m-0 -mb-8 md:-mb-12 text-center text-3xl font-bold flex items-center justify-center gap-2 -translate-x-[14px] translate-y-[6px] pointer-events-none select-none">
           <img
             src="/brand/CVSavesBlack.svg"
             alt="CVSaves"
-            className="h-[255px] w-auto object-contain"
+            className="h-52 md:h-[255px] w-auto object-contain"
           />
           <span className="relative inline-block -translate-x-4 top-[2px]">•</span>
           <span>Signup</span>
@@ -121,12 +134,14 @@ const Signup: React.FC = () => {
             value={first}
             onChange={(e) => setFirst(e.target.value)}
             disabled={sent}
+            className="h-11 rounded-md border border-input bg-background px-3 text-sm"
           />
           <Input
             placeholder="Last name"
             value={last}
             onChange={(e) => setLast(e.target.value)}
             disabled={sent}
+            className="h-11 rounded-md border border-input bg-background px-3 text-sm"
           />
           <Input
             placeholder="Email"
@@ -134,14 +149,44 @@ const Signup: React.FC = () => {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             disabled={sent}
+            className="h-11 rounded-md border border-input bg-background px-3 text-sm"
           />
-          <Input
-            placeholder="Password"
-            type="password"
-            value={pass}
-            onChange={(e) => setPass(e.target.value)}
-            disabled={sent}
-          />
+          <div className="relative">
+            <Input
+              placeholder="Password"
+              type={showPass ? "text" : "password"}
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
+              disabled={sent}
+              className="pr-10 h-11 rounded-md border border-input bg-background px-3 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPass((p) => !p)}
+              className="absolute inset-y-0 right-3 flex items-center text-muted-foreground"
+              aria-label={showPass ? "Hide password" : "Show password"}
+            >
+              {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          <div className="relative">
+            <Input
+              placeholder="Confirm password"
+              type={showPass2 ? "text" : "password"}
+              value={pass2}
+              onChange={(e) => setPass2(e.target.value)}
+              disabled={sent}
+              className="pr-10 h-11 rounded-md border border-input bg-background px-3 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPass2((p) => !p)}
+              className="absolute inset-y-0 right-3 flex items-center text-muted-foreground"
+              aria-label={showPass2 ? "Hide password" : "Show password"}
+            >
+              {showPass2 ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
 
         {/* Terms checkbox + inline link to open dialog */}

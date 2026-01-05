@@ -5,11 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Toaster } from "@/components/ui/toaster";
+import { Eye, EyeOff } from "lucide-react";
 
 const ForgotPassword: React.FC = () => {
   const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showEmail, setShowEmail] = useState(false);
 
   const submit = async () => {
     if (!email.trim()) {
@@ -50,12 +52,23 @@ const ForgotPassword: React.FC = () => {
 
         <div className="space-y-2">
           <label className="text-sm font-medium">Email address</label>
-          <Input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-          />
+          <div className="relative">
+            <Input
+              type={showEmail ? "text" : "email"}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowEmail((p) => !p)}
+              className="absolute inset-y-0 right-3 flex items-center text-muted-foreground"
+              aria-label={showEmail ? "Hide email" : "Show email"}
+            >
+              {showEmail ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
 
         <Button className="w-full" onClick={submit} disabled={loading}>

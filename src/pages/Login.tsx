@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 
@@ -12,6 +13,7 @@ const Login: React.FC = () => {
   const [email, setE] = useState("");
   const [pass, setP] = useState("");
   const [loading, setL] = useState(false);
+  const [showPass, setShowPass] = useState(false);
 
   const goHome = () => nav("/", { replace: true });
 
@@ -62,14 +64,24 @@ const Login: React.FC = () => {
 
         <div className="space-y-2">
           <label className="text-sm font-medium text-foreground">Password</label>
-          <Input
-            value={pass}
-            onChange={(e) => setP(e.target.value)}
-            type="password"
-            placeholder="Enter your password"
-            className="h-11 rounded-md border border-input bg-background px-3 text-sm"
-            autoComplete="current-password"
-          />
+          <div className="relative">
+            <Input
+              value={pass}
+              onChange={(e) => setP(e.target.value)}
+              type={showPass ? "text" : "password"}
+              placeholder="Enter your password"
+              className="h-11 rounded-md border border-input bg-background px-3 pr-10 text-sm"
+              autoComplete="current-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPass((p) => !p)}
+              className="absolute inset-y-0 right-3 flex items-center text-muted-foreground"
+              aria-label={showPass ? "Hide password" : "Show password"}
+            >
+              {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
           <Link to="/forgot-password" className="mt-1 inline-block text-xs text-muted-foreground underline">
             Forgot password?
           </Link>

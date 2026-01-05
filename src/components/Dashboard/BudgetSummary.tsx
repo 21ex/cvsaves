@@ -134,6 +134,12 @@ const BudgetSummary = ({
                     className="h-8 w-24 text-lg font-bold"
                     min="0"
                     step="0.01"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleIncomeSave();
+                      }
+                    }}
                   />
                   <Button
                     variant="ghost"
@@ -195,6 +201,12 @@ const BudgetSummary = ({
                     className="h-8 w-24 text-lg font-bold"
                     min="0"
                     step="0.01"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleBudgetSave();
+                      }
+                    }}
                   />
                   <Button
                     variant="ghost"

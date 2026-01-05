@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
+import { Eye, EyeOff } from "lucide-react";
 
 const ResetPassword: React.FC = () => {
   const { toast } = useToast();
@@ -13,6 +14,8 @@ const ResetPassword: React.FC = () => {
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<{ text: string; tone: "info" | "success" | "error" } | null>(null);
+  const [showPass, setShowPass] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   // Apply session from URL hash (access_token/refresh_token for recovery)
   useEffect(() => {
@@ -85,22 +88,44 @@ const ResetPassword: React.FC = () => {
 
         <div className="space-y-2">
           <label className="text-sm font-medium">New password</label>
-          <Input
-            type="password"
-            value={newPass}
-            onChange={(e) => setNewPass(e.target.value)}
-            placeholder="New password"
-          />
+          <div className="relative">
+            <Input
+              type={showPass ? "text" : "password"}
+              value={newPass}
+              onChange={(e) => setNewPass(e.target.value)}
+              placeholder="New password"
+              className="pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPass((p) => !p)}
+              className="absolute inset-y-0 right-3 flex items-center text-muted-foreground"
+              aria-label={showPass ? "Hide password" : "Show password"}
+            >
+              {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
 
         <div className="space-y-2">
           <label className="text-sm font-medium">Confirm password</label>
-          <Input
-            type="password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            placeholder="Re-enter password"
-          />
+          <div className="relative">
+            <Input
+              type={showConfirm ? "text" : "password"}
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              placeholder="Re-enter password"
+              className="pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirm((p) => !p)}
+              className="absolute inset-y-0 right-3 flex items-center text-muted-foreground"
+              aria-label={showConfirm ? "Hide password" : "Show password"}
+            >
+              {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
 
         <Button className="w-full" onClick={submit} disabled={loading || !ready}>

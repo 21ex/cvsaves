@@ -868,7 +868,7 @@ const Home: React.FC = () => {
 
       {/* ░░ Category dialog ░░ */}
       <Dialog open={catDlg} onOpenChange={setCatDlg}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Manage categories</DialogTitle>
           </DialogHeader>
