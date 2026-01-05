@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import Home from "@/components/home";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
+import ForgotPassword from "@/pages/ForgotPassword";
 
 /* -------------------------------------------------------------------------- */
 
@@ -16,6 +17,7 @@ const App = () => (
       <Route path="/" element={<Guard><Home /></Guard>} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
 
       {/* fallback → login */}
       <Route path="*" element={<Navigate to="/login" replace />} />

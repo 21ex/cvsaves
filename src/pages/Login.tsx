@@ -11,7 +11,6 @@ const Login: React.FC = () => {
   const [email, setE] = useState("");
   const [pass, setP] = useState("");
   const [loading, setL] = useState(false);
-  const [resetting, setResetting] = useState(false);
 
   const go = async () => {
     setL(true);
@@ -21,27 +20,6 @@ const Login: React.FC = () => {
       toast({ title: "Login failed", description: error.message, variant: "destructive" });
     } else {
       nav("/", { replace: true });
-    }
-  };
-
-  const doReset = async () => {
-    if (!email.trim()) {
-      toast({
-        title: "Enter your email",
-        description: "We’ll send the reset link there.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setResetting(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${location.origin}/login`,
-    });
-    setResetting(false);
-    if (error) {
-      toast({ title: "Reset failed", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Check your email", description: "We sent a password reset link." });
     }
   };
 
@@ -75,14 +53,9 @@ const Login: React.FC = () => {
             type="password"
             placeholder="••••••••"
           />
-          <button
-            type="button"
-            className="mt-1 text-xs text-foreground underline"
-            onClick={doReset}
-            disabled={resetting}
-          >
-            {resetting ? "Sending..." : "Forgot password?"}
-          </button>
+          <Link to="/forgot-password" className="mt-1 inline-block text-xs text-foreground underline">
+            Forgot password?
+          </Link>
         </div>
 
         <Button className="w-full" onClick={go} disabled={loading}>
