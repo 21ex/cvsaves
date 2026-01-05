@@ -44,7 +44,7 @@ const Login: React.FC = () => {
           <img
             src="/brand/CVSavesLongText.svg"
             alt="CVSaves by CVSolutions"
-            className="mx-auto h-44 w-auto object-contain md:h-[320px] md:-mb-6"
+            className="mx-auto h-72 w-auto object-contain md:h-[320px] md:-mb-6"
           />
         </button>
 
