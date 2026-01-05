@@ -13,6 +13,8 @@ const Login: React.FC = () => {
   const [pass, setP] = useState("");
   const [loading, setL] = useState(false);
 
+  const goHome = () => nav("/", { replace: true });
+
   const go = async () => {
     setL(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
@@ -30,47 +32,55 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen grid place-items-center">
+    <div className="min-h-screen grid place-items-center px-4 py-8">
       <Toaster />
-      <div className="w-full max-w-xs space-y-4">
-        {/* BIG logo, but pull content upward so the overall layout feels like the default */}
-        <Link to="/">
+      <div className="w-full max-w-xs space-y-5">
+        <button
+          type="button"
+          onClick={goHome}
+          className="block text-center mx-auto focus:outline-none"
+          aria-label="CVSaves Home"
+        >
           <img
             src="/brand/CVSavesLongText.svg"
             alt="CVSaves by CVSolutions"
-            className="mx-auto h-[320px] w-auto object-contain -mb-8 sm:-mb-10"
+            className="mx-auto h-44 w-auto object-contain md:h-[320px] md:-mb-6"
           />
-        </Link>
+        </button>
 
-        <div>
-          <label>Email address</label>
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-foreground">Email address</label>
           <Input
             value={email}
             onChange={(e) => setE(e.target.value)}
             type="email"
-            placeholder="your@email.com"
+            placeholder="you@example.com"
+            className="h-11 rounded-md border border-input bg-background px-3 text-sm"
+            autoComplete="username"
           />
         </div>
 
-        <div>
-          <label>Password</label>
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-foreground">Password</label>
           <Input
             value={pass}
             onChange={(e) => setP(e.target.value)}
             type="password"
-            placeholder="••••••••"
+            placeholder="Enter your password"
+            className="h-11 rounded-md border border-input bg-background px-3 text-sm"
+            autoComplete="current-password"
           />
-          <Link to="/forgot-password" className="mt-1 inline-block text-xs text-foreground underline">
+          <Link to="/forgot-password" className="mt-1 inline-block text-xs text-muted-foreground underline">
             Forgot password?
           </Link>
         </div>
 
-        <Button className="w-full" onClick={go} disabled={loading}>
-          {loading ? "Logging in…" : "Log in"}
+        <Button className="w-full h-11 text-sm font-semibold mt-2" onClick={go} disabled={loading}>
+          {loading ? "Logging in..." : "Log in"}
         </Button>
 
-        <p className="text-sm text-center text-muted-foreground">
-          Don’t have an account?{" "}
+        <p className="text-sm text-center text-muted-foreground mt-1">
+          Don't have an account?{" "}
           <Link to="/signup" className="underline">
             Sign up
           </Link>
