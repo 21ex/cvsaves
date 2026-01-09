@@ -116,6 +116,7 @@ const Home: React.FC = () => {
   const [pfFn, setPfFn] = useState("");
   const [pfLn, setPfLn] = useState("");
   const [pfEm, setPfEm] = useState("");
+  const [verifySending, setVerifySending] = useState(false);
 
   /* mode (budget vs tracker) */
   const [mode, setMode] = useState<"budget" | "tracker">(() => {
@@ -126,6 +127,10 @@ const Home: React.FC = () => {
   const monthKey = `${year}-${String(
     new Date(Date.parse(`${month} 1, 2000`)).getMonth() + 1,
   ).padStart(2, "0")}`;
+  const confirmedAt =
+    (session?.user as any)?.email_confirmed_at ||
+    (session?.user as any)?.confirmed_at;
+  const isVerified = !!confirmedAt;
 
   // When session changes, load only that user's stored theme; logout resets to light.
   useEffect(() => {
@@ -201,6 +206,26 @@ const Home: React.FC = () => {
   /* ---------- helpers ---------- */
   const notify = (t: string, d?: string) =>
     toast({ title: t, description: d, variant: d ? "destructive" : "default" });
+
+  const resendVerification = async () => {
+    if (!session?.user?.email) return;
+    try {
+      setVerifySending(true);
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: session.user.email,
+      });
+      if (error) throw error;
+      toast({
+        title: "Verification email sent",
+        description: "Check your inbox to confirm your address.",
+      });
+    } catch (e: any) {
+      notify("Send failed", e.message);
+    } finally {
+      setVerifySending(false);
+    }
+  };
 
   async function saveMeta(next: { income: number; budget: number }) {
     if (!session) return;
@@ -544,7 +569,19 @@ const Home: React.FC = () => {
             </Button>
           </div>
         </header>
-
+        {session?.user && !isVerified && (
+          <div className="mb-4 rounded-md border border-yellow-300/40 bg-yellow-50 text-yellow-900 dark:bg-yellow-900/20 dark:text-yellow-100 px-3 py-2 text-sm flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>Verify your email for account recovery and security.</div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={resendVerification}
+              disabled={verifySending}
+            >
+              {verifySending ? "Sending..." : "Resend verification"}
+            </Button>
+          </div>
+        )}
         {/* summary — HIDDEN in tracker mode */}
         {mode === "budget" && (
           <div className="my-6 md:my-8">

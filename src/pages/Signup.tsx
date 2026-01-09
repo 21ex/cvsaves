@@ -28,6 +28,7 @@ const Signup: React.FC = () => {
   const { toast } = useToast();
 
   const [email, setEmail] = useState("");
+  const [email2, setEmail2] = useState("");
   const [pass, setPass] = useState("");
   const [pass2, setPass2] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -41,10 +42,19 @@ const Signup: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const go = async () => {
-    if (!email || !pass || !pass2 || !first || !last) {
+    if (!email || !email2 || !pass || !pass2 || !first || !last) {
       toast({
         title: "Missing info",
         description: "Please fill in all fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (email !== email2) {
+      toast({
+        title: "Emails do not match",
+        description: "Please enter the same email twice.",
         variant: "destructive",
       });
       return;
@@ -98,8 +108,8 @@ const Signup: React.FC = () => {
       });
     } else {
       toast({
-        title: "Check your e-mail",
-        description: "We sent a verification link – confirm your address to finish.",
+        title: "Account created",
+        description: "You can now log in.",
       });
       setSent(true);
     }
@@ -124,7 +134,7 @@ const Signup: React.FC = () => {
 
         {sent && (
           <div className="rounded-md bg-green-100 dark:bg-green-900/40 p-3 text-center text-sm text-green-800 dark:text-green-200">
-            Almost done!&nbsp;Open the verification link we just e‑mailed you.
+            Account created! You can now log in.
           </div>
         )}
 
@@ -148,6 +158,14 @@ const Signup: React.FC = () => {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            disabled={sent}
+            className="h-11 rounded-md border border-input bg-background px-3 text-sm"
+          />
+          <Input
+            placeholder="Confirm email"
+            type="email"
+            value={email2}
+            onChange={(e) => setEmail2(e.target.value)}
             disabled={sent}
             className="h-11 rounded-md border border-input bg-background px-3 text-sm"
           />
