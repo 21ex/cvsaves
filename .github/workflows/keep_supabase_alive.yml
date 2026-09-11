@@ -1,19 +1,14 @@
 name: Keep Supabase Alive
 
 "on":
+  schedule:
+    - cron: '0 12 */3 * *'
   workflow_dispatch:
 
 jobs:
   ping-supabase:
     runs-on: ubuntu-latest
     steps:
-      - name: Debug secret lengths (no values exposed)
+      - name: Ping Supabase health endpoint
         run: |
-          echo "URL length: ${#SUPABASE_URL}"
-          echo "KEY length: ${#SUPABASE_ANON_KEY}"
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-      - name: Ping Supabase REST endpoint
-        run: |
-          curl -sf -o /dev/null -w "HTTP status: %{http_code}\n" "${{ secrets.SUPABASE_URL }}/rest/v1/" -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"
+          curl -sf -o /dev/null -w "HTTP status: %{http_code}\n" "${{ secrets.SUPABASE_URL }}/auth/v1/health?apikey=${{ secrets.SUPABASE_ANON_KEY }}"
